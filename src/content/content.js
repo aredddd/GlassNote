@@ -332,26 +332,49 @@ class GlassNoteSystem {
   }
 
   /**
-   * 智能判断是否应该跳过此次选择
+   * 智能判断是否应该跳过此次选择 - 简化版本
    */
   shouldSkipSelection(range) {
     const startContainer = range.startContainer;
     const endContainer = range.endContainer;
     
-    // 获取选择的所有相关元素
-    const elementsToCheck = new Set();
+    // 只检查直接相关的元素，避免过度检查导致误判
+    const elementsToCheck = [];
     
-    // 添加开始和结束容器的父元素
-    this.addElementAndParents(startContainer, elementsToCheck);
-    this.addElementAndParents(endContainer, elementsToCheck);
+    // 检查起始和结束容器的直接父元素
+    if (startContainer.nodeType === Node.TEXT_NODE && startContainer.parentElement) {
+      elementsToCheck.push(startContainer.parentElement);
+    } else if (startContainer.nodeType === Node.ELEMENT_NODE) {
+      elementsToCheck.push(startContainer);
+    }
     
-    // 添加公共祖先容器
-    this.addElementAndParents(range.commonAncestorContainer, elementsToCheck);
+    if (endContainer !== startContainer) {
+      if (endContainer.nodeType === Node.TEXT_NODE && endContainer.parentElement) {
+        elementsToCheck.push(endContainer.parentElement);
+      } else if (endContainer.nodeType === Node.ELEMENT_NODE) {
+        elementsToCheck.push(endContainer);
+      }
+    }
 
-    // 检查这些元素是否在排除列表中
+    // 检查公共祖先容器（只向上检查3层）
+    let ancestor = range.commonAncestorContainer;
+    if (ancestor.nodeType === Node.TEXT_NODE) {
+      ancestor = ancestor.parentElement;
+    }
+    
+    let depth = 0;
+    while (ancestor && ancestor !== document.body && depth < 3) {
+      if (ancestor.nodeType === Node.ELEMENT_NODE) {
+        elementsToCheck.push(ancestor);
+      }
+      ancestor = ancestor.parentElement;
+      depth++;
+    }
+
+    // 检查这些元素是否应该被排除
     for (const element of elementsToCheck) {
       if (this.isElementExcluded(element)) {
-        console.log('⚠️ 发现排除元素:', element.tagName || element.nodeType, element.className || '');
+        console.log('⚠️ 发现排除元素:', element.tagName || element.nodeType, element.className || element.id || '');
         return true;
       }
     }
@@ -360,61 +383,49 @@ class GlassNoteSystem {
   }
 
   /**
-   * 添加元素及其父元素到检查集合
-   */
-  addElementAndParents(node, elementSet) {
-    let current = node;
-    
-    // 如果是文本节点，从其父元素开始
-    if (current.nodeType === Node.TEXT_NODE) {
-      current = current.parentElement;
-    }
-    
-    // 向上遍历到document，但最多检查10层（避免过度遍历）
-    let depth = 0;
-    while (current && current !== document && current !== document.body && depth < 10) {
-      if (current.nodeType === Node.ELEMENT_NODE) {
-        elementSet.add(current);
-      }
-      current = current.parentElement;
-      depth++;
-    }
-  }
-
-  /**
-   * 检查元素是否应该被排除
+   * 检查元素是否应该被排除 - 修复过度排除问题
    */
   isElementExcluded(element) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) {
       return false;
     }
 
-    // 检查可编辑元素
+    // 检查可编辑元素（这个检查保持严格）
     if (element.isContentEditable || 
         element.contentEditable === 'true' ||
         element.matches?.('input, textarea, [contenteditable="true"], [contenteditable=""], .ql-editor')) {
+      console.log('🚫 排除可编辑元素:', element.tagName);
       return true;
     }
 
-    // 检查已有标注
-    if (element.matches?.('.glassnote-annotation') ||
-        element.closest?.('.glassnote-annotation')) {
+    // 检查是否直接是标注元素（修复：只检查元素本身，不检查父级）
+    if (element.matches?.('.glassnote-annotation')) {
+      console.log('🚫 排除标注元素本身:', element.tagName);
       return true;
     }
 
     // 检查特殊元素（代码块、脚本等）
     if (element.matches?.('script, style, code, pre, .highlight, .hljs')) {
+      console.log('🚫 排除特殊元素:', element.tagName);
       return true;
     }
 
-    // 检查隐藏或不可见元素
-    const style = window.getComputedStyle(element);
-    if (style.display === 'none' || style.visibility === 'hidden') {
-      return true;
+    // 检查隐藏或不可见元素（只检查直接样式，避免误判）
+    try {
+      const style = window.getComputedStyle(element);
+      if (style.display === 'none' || style.visibility === 'hidden') {
+        console.log('🚫 排除隐藏元素:', element.tagName);
+        return true;
+      }
+    } catch (error) {
+      // 如果获取样式失败，不排除
+      console.warn('获取元素样式失败:', error);
     }
 
-    // 检查特殊的富文本编辑器
-    if (element.matches?.('[class*="editor"], [class*="wysiwyg"], [role="textbox"]')) {
+    // 检查特殊的富文本编辑器（保持但放宽条件）
+    if (element.matches?.('[role="textbox"]') ||
+        (element.className && element.className.includes('editor') && element.isContentEditable)) {
+      console.log('🚫 排除富文本编辑器:', element.tagName, element.className);
       return true;
     }
 

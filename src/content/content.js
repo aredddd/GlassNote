@@ -45,6 +45,9 @@ class GlassNoteSystem {
         hasEventListeners: true,
         extensionContext: this.checkExtensionContext()
       });
+      
+      // 启动健康检查
+      this.startHealthCheck();
     } catch (error) {
       console.error('❌ GlassNote 初始化失败:', error);
     }
@@ -2631,6 +2634,12 @@ class GlassNoteSystem {
    * 通过结构化锚点查找元素
    */
   findByStructuralAnchor(structuralAnchor) {
+    // 检查扩展上下文
+    if (!this.checkExtensionContext()) {
+      console.warn('扩展上下文失效，跳过结构化锚点查找');
+      return { element: null };
+    }
+
     if (!structuralAnchor || !structuralAnchor.parent) {
       return { element: null };
     }
@@ -2671,6 +2680,12 @@ class GlassNoteSystem {
    * 通过文本签名查找元素
    */
   findByTextSignature(textAnchor) {
+    // 检查扩展上下文
+    if (!this.checkExtensionContext()) {
+      console.warn('扩展上下文失效，跳过文本签名查找');
+      return { element: null };
+    }
+
     if (!textAnchor || !textAnchor.signature) {
       return { element: null };
     }
@@ -3367,7 +3382,195 @@ class GlassNoteSystem {
    * 检查扩展上下文是否有效
    */
   checkExtensionContext() {
-    return !!(chrome?.runtime?.id && chrome?.storage?.local);
+    try {
+      const isValid = !!(chrome?.runtime?.id && chrome?.storage?.local);
+      if (!isValid && !this.contextInvalidated) {
+        this.handleContextInvalidation();
+      }
+      return isValid;
+    } catch (error) {
+      console.log('扩展上下文检查失败:', error.message);
+      if (!this.contextInvalidated) {
+        this.handleContextInvalidation();
+      }
+      return false;
+    }
+  }
+
+  /**
+   * 处理扩展上下文失效
+   */
+  handleContextInvalidation() {
+    console.warn('🚨 检测到扩展上下文失效，正在清理和恢复...');
+    
+    // 标记上下文已失效，避免重复处理
+    this.contextInvalidated = true;
+    
+    // 停止所有定期检查
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+    
+    // 禁用系统功能
+    this.isEnabled = false;
+    
+    // 清理工具栏
+    this.hideToolbar();
+    
+    // 显示恢复提示
+    this.showContextRecoveryMessage();
+    
+    // 清理所有事件监听器（防止进一步错误）
+    this.cleanupEventListeners();
+    
+    // 尝试重新初始化（延迟执行）
+    setTimeout(() => {
+      this.attemptRecovery();
+    }, 2000);
+  }
+
+  /**
+   * 显示上下文恢复消息
+   */
+  showContextRecoveryMessage() {
+    // 创建恢复提示
+    const recoveryDiv = document.createElement('div');
+    recoveryDiv.id = 'glassnote-recovery-notice';
+    recoveryDiv.innerHTML = `
+      <div style="
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 16px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        z-index: 10000;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px;
+        max-width: 300px;
+        animation: slideInRight 0.3s ease-out;
+      ">
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 18px; margin-right: 8px;">🔄</span>
+          <strong>GlassNote 正在恢复</strong>
+        </div>
+        <div style="font-size: 12px; opacity: 0.9; line-height: 1.4;">
+          扩展已重新加载，系统正在自动恢复中...
+        </div>
+        <div style="margin-top: 8px;">
+          <button onclick="window.location.reload()" style="
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+          ">刷新页面</button>
+        </div>
+      </div>
+      <style>
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      </style>
+    `;
+    
+    // 移除旧的提示
+    const existing = document.getElementById('glassnote-recovery-notice');
+    if (existing) {
+      existing.remove();
+    }
+    
+    document.body.appendChild(recoveryDiv);
+    
+    // 5秒后自动移除
+    setTimeout(() => {
+      if (recoveryDiv.parentNode) {
+        recoveryDiv.remove();
+      }
+    }, 5000);
+  }
+
+  /**
+   * 清理事件监听器
+   */
+  cleanupEventListeners() {
+    try {
+      // 清理现有的事件监听器
+      document.removeEventListener('mouseup', this.handleTextSelection);
+      document.removeEventListener('keydown', this.handleKeyDown);
+      document.removeEventListener('click', this.handleDocumentClick);
+      document.removeEventListener('scroll', this.handleScroll);
+      
+      console.log('✅ 事件监听器已清理');
+    } catch (error) {
+      console.log('清理事件监听器时出错:', error.message);
+    }
+  }
+
+  /**
+   * 尝试恢复扩展功能
+   */
+  async attemptRecovery() {
+    console.log('🔄 尝试恢复扩展功能...');
+    
+    try {
+      // 重置失效标志
+      this.contextInvalidated = false;
+      
+      // 检查上下文是否已恢复
+      if (this.checkExtensionContext()) {
+        console.log('✅ 扩展上下文已恢复，重新初始化系统');
+        
+        // 重新设置事件监听器
+        this.setupEventListeners();
+        
+        // 重新检查当前页面
+        await this.checkCurrentPage();
+        
+        // 显示恢复成功消息
+        this.showToast('GlassNote 已恢复正常', 'success');
+        
+        // 重新启动健康检查
+        this.startHealthCheck();
+        
+      } else {
+        console.log('⚠️ 扩展上下文仍未恢复，建议刷新页面');
+        this.showToast('扩展未完全恢复，建议刷新页面', 'warning');
+      }
+    } catch (error) {
+      console.error('恢复过程中出错:', error);
+      this.showToast('恢复失败，请刷新页面', 'error');
+    }
+  }
+
+  /**
+   * 启动健康检查
+   */
+  startHealthCheck() {
+    // 清理现有的健康检查
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+    }
+    
+    // 启动新的健康检查
+    this.healthCheckInterval = setInterval(() => {
+      try {
+        if (!this.contextInvalidated && !this.checkExtensionContext()) {
+          console.warn('🚨 健康检查发现扩展上下文失效');
+          // checkExtensionContext 内部会调用 handleContextInvalidation
+        }
+      } catch (error) {
+        console.warn('健康检查过程中出错:', error.message);
+      }
+    }, 30000); // 每30秒检查一次
+    
+    console.log('✅ 扩展健康检查已启动');
   }
 
   /**
@@ -3480,12 +3683,7 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-// 定期检查扩展上下文健康状态
-setInterval(() => {
-  if (!glassNote.checkExtensionContext()) {
-    console.warn('⚠️ 扩展上下文失效，系统功能受限');
-  }
-}, 30000); // 每30秒检查一次
+// 健康检查已在 init() 中启动
 
 console.log('🎉 GlassNote v2.0 加载完成！');
 console.log('💡 使用提示：选择文本查看标注选项，或按 Ctrl+Shift+G 切换显示');

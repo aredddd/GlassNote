@@ -12,6 +12,10 @@ class GlassNoteSystem {
     this.currentUrl = window.location.href;
     this.annotationCounter = 0;
     
+    // 调试模式 - 临时启用详细日志
+    this.debugMode = true; // 设为true来启用详细调试
+    this.forceMode = false; // 强制模式，跳过所有检查
+    
     this.init();
   }
 
@@ -255,6 +259,24 @@ class GlassNoteSystem {
         e.preventDefault();
         this.toggleGlassNote();
       }
+      
+      // 调试强制模式快捷键 Ctrl+Shift+D
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        this.forceMode = !this.forceMode;
+        const status = this.forceMode ? '启用' : '禁用';
+        console.log(`🚨 强制模式已${status}`);
+        this.showToast(`强制模式已${status} (跳过所有检查)`, this.forceMode ? 'warning' : 'info');
+      }
+      
+      // 切换调试模式快捷键 Ctrl+Shift+B  
+      if (e.ctrlKey && e.shiftKey && e.key === 'B') {
+        e.preventDefault();
+        this.debugMode = !this.debugMode;
+        const status = this.debugMode ? '启用' : '禁用';
+        console.log(`🔍 调试模式已${status}`);
+        this.showToast(`调试模式已${status} (控制台日志)`, this.debugMode ? 'info' : 'success');
+      }
     });
 
     // 点击空白处隐藏工具栏（只有启用时才需要）
@@ -332,103 +354,199 @@ class GlassNoteSystem {
   }
 
   /**
-   * 智能判断是否应该跳过此次选择 - 简化版本
+   * 智能判断是否应该跳过此次选择 - 调试增强版本
    */
   shouldSkipSelection(range) {
     const startContainer = range.startContainer;
     const endContainer = range.endContainer;
+    
+    if (this.debugMode) {
+      console.log('🔍 开始检查选择是否应该跳过');
+      console.log('📍 选择范围:', {
+        startContainer: startContainer.nodeType === Node.TEXT_NODE ? 
+          `TEXT: "${startContainer.textContent.substring(0, 50)}..."` : 
+          `ELEMENT: ${startContainer.tagName}`,
+        endContainer: endContainer.nodeType === Node.TEXT_NODE ? 
+          `TEXT: "${endContainer.textContent.substring(0, 50)}..."` : 
+          `ELEMENT: ${endContainer.tagName}`,
+        commonAncestor: range.commonAncestorContainer.nodeType === Node.TEXT_NODE ?
+          `TEXT_PARENT: ${range.commonAncestorContainer.parentElement?.tagName}` :
+          `ELEMENT: ${range.commonAncestorContainer.tagName}`
+      });
+    }
     
     // 只检查直接相关的元素，避免过度检查导致误判
     const elementsToCheck = [];
     
     // 检查起始和结束容器的直接父元素
     if (startContainer.nodeType === Node.TEXT_NODE && startContainer.parentElement) {
-      elementsToCheck.push(startContainer.parentElement);
+      elementsToCheck.push({
+        element: startContainer.parentElement,
+        source: 'startContainer.parent'
+      });
     } else if (startContainer.nodeType === Node.ELEMENT_NODE) {
-      elementsToCheck.push(startContainer);
+      elementsToCheck.push({
+        element: startContainer,
+        source: 'startContainer'
+      });
     }
     
     if (endContainer !== startContainer) {
       if (endContainer.nodeType === Node.TEXT_NODE && endContainer.parentElement) {
-        elementsToCheck.push(endContainer.parentElement);
+        elementsToCheck.push({
+          element: endContainer.parentElement,
+          source: 'endContainer.parent'
+        });
       } else if (endContainer.nodeType === Node.ELEMENT_NODE) {
-        elementsToCheck.push(endContainer);
+        elementsToCheck.push({
+          element: endContainer,
+          source: 'endContainer'
+        });
       }
     }
 
-    // 检查公共祖先容器（只向上检查3层）
+    // 检查公共祖先容器（只向上检查2层，进一步减少误判）
     let ancestor = range.commonAncestorContainer;
     if (ancestor.nodeType === Node.TEXT_NODE) {
       ancestor = ancestor.parentElement;
     }
     
     let depth = 0;
-    while (ancestor && ancestor !== document.body && depth < 3) {
+    while (ancestor && ancestor !== document.body && depth < 2) {
       if (ancestor.nodeType === Node.ELEMENT_NODE) {
-        elementsToCheck.push(ancestor);
+        elementsToCheck.push({
+          element: ancestor,
+          source: `ancestor-${depth}`
+        });
       }
       ancestor = ancestor.parentElement;
       depth++;
     }
 
+    // 应急模式：按Ctrl+Shift+D可以临时禁用所有检查
+    if (this.forceMode) {
+      if (this.debugMode) {
+        console.log('🚨 强制模式启用，跳过所有检查');
+      }
+      return false;
+    }
+
+    if (this.debugMode) {
+      console.log('📋 需要检查的元素列表:', elementsToCheck.map(item => ({
+        tag: item.element.tagName,
+        className: item.element.className,
+        id: item.element.id,
+        source: item.source
+      })));
+    }
+
     // 检查这些元素是否应该被排除
-    for (const element of elementsToCheck) {
-      if (this.isElementExcluded(element)) {
-        console.log('⚠️ 发现排除元素:', element.tagName || element.nodeType, element.className || element.id || '');
+    for (const {element, source} of elementsToCheck) {
+      const excluded = this.isElementExcluded(element);
+      
+      if (this.debugMode) {
+        console.log(`🔍 检查元素 ${source}:`, {
+          tag: element.tagName,
+          className: element.className || '(无)',
+          id: element.id || '(无)',
+          excluded: excluded
+        });
+      }
+      
+      if (excluded) {
+        if (this.debugMode) {
+          console.log('⚠️ 选择被跳过，原因:', source, element.tagName, element.className || element.id || '');
+        }
         return true;
       }
     }
 
+    if (this.debugMode) {
+      console.log('✅ 选择检查通过，显示工具栏');
+    }
     return false;
   }
 
   /**
-   * 检查元素是否应该被排除 - 修复过度排除问题
+   * 检查元素是否应该被排除 - 进一步放宽条件
    */
   isElementExcluded(element) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+      if (this.debugMode) {
+        console.log('🔍 元素检查: 非元素节点，不排除');
+      }
       return false;
     }
 
-    // 检查可编辑元素（这个检查保持严格）
-    if (element.isContentEditable || 
-        element.contentEditable === 'true' ||
-        element.matches?.('input, textarea, [contenteditable="true"], [contenteditable=""], .ql-editor')) {
-      console.log('🚫 排除可编辑元素:', element.tagName);
+    if (this.debugMode) {
+      console.log('🔍 检查元素是否排除:', {
+        tag: element.tagName,
+        className: element.className,
+        id: element.id,
+        isContentEditable: element.isContentEditable,
+        contentEditable: element.contentEditable
+      });
+    }
+
+    // 只检查最关键的可编辑元素
+    if (element.matches?.('input, textarea')) {
+      if (this.debugMode) {
+        console.log('🚫 排除input/textarea元素:', element.tagName);
+      }
       return true;
     }
 
-    // 检查是否直接是标注元素（修复：只检查元素本身，不检查父级）
-    if (element.matches?.('.glassnote-annotation')) {
-      console.log('🚫 排除标注元素本身:', element.tagName);
+    // 只检查明确标记为可编辑的元素
+    if (element.contentEditable === 'true' && element.isContentEditable) {
+      if (this.debugMode) {
+        console.log('🚫 排除明确的可编辑元素:', element.tagName);
+      }
       return true;
     }
 
-    // 检查特殊元素（代码块、脚本等）
-    if (element.matches?.('script, style, code, pre, .highlight, .hljs')) {
-      console.log('🚫 排除特殊元素:', element.tagName);
+    // 检查是否直接是标注元素（只检查直接匹配）
+    if (element.classList?.contains('glassnote-annotation')) {
+      if (this.debugMode) {
+        console.log('🚫 排除标注元素本身:', element.tagName);
+      }
       return true;
     }
 
-    // 检查隐藏或不可见元素（只检查直接样式，避免误判）
+    // 只排除最关键的脚本和样式元素
+    if (element.matches?.('script, style')) {
+      if (this.debugMode) {
+        console.log('🚫 排除脚本/样式元素:', element.tagName);
+      }
+      return true;
+    }
+
+    // 只检查明确隐藏的元素，放宽检查条件
     try {
       const style = window.getComputedStyle(element);
-      if (style.display === 'none' || style.visibility === 'hidden') {
-        console.log('🚫 排除隐藏元素:', element.tagName);
+      if (style.display === 'none') {
+        if (this.debugMode) {
+          console.log('🚫 排除display:none元素:', element.tagName);
+        }
         return true;
       }
+      // 移除visibility检查，因为可能误判
     } catch (error) {
-      // 如果获取样式失败，不排除
-      console.warn('获取元素样式失败:', error);
+      if (this.debugMode) {
+        console.warn('⚠️ 获取元素样式失败，不排除:', error);
+      }
     }
 
-    // 检查特殊的富文本编辑器（保持但放宽条件）
-    if (element.matches?.('[role="textbox"]') ||
-        (element.className && element.className.includes('editor') && element.isContentEditable)) {
-      console.log('🚫 排除富文本编辑器:', element.tagName, element.className);
+    // 大幅放宽富文本编辑器检查
+    if (element.matches?.('[role="textbox"]') && element.isContentEditable) {
+      if (this.debugMode) {
+        console.log('🚫 排除确认的富文本编辑器:', element.tagName);
+      }
       return true;
     }
 
+    if (this.debugMode) {
+      console.log('✅ 元素检查通过，不排除:', element.tagName);
+    }
     return false;
   }
 
@@ -1274,3 +1392,6 @@ setInterval(() => {
 
 console.log('🎉 GlassNote v2.0 加载完成！');
 console.log('💡 使用提示：选择文本查看标注选项，或按 Ctrl+Shift+G 切换显示');
+console.log('🔧 调试快捷键：');
+console.log('   Ctrl+Shift+B - 切换调试模式 (控制台详细日志)');
+console.log('   Ctrl+Shift+D - 强制模式 (跳过所有选择检查)');

@@ -1060,9 +1060,19 @@ class GlassNoteSystem {
     };
 
     this.annotations.set(annotationId, annotationData);
+    
+    console.log('💾 准备保存标注数据:', annotationData);
+    console.log('🔗 生成的DOM路径:', domPath);
+    console.log('📍 目标元素信息:', {
+      tagName: mainElement.tagName,
+      className: mainElement.className,
+      id: mainElement.id,
+      textContent: mainElement.textContent?.substring(0, 50)
+    });
+    
     this.saveAnnotation(annotationData);
 
-    console.log('💾 标注数据已保存:', annotationData);
+    console.log('✅ 标注数据已保存:', annotationData);
   }
 
   /**
@@ -1141,31 +1151,33 @@ class GlassNoteSystem {
     let current = element;
     
     // 如果当前元素是标注元素，从其父元素开始
-    if (current.classList.contains('gn-a') || current.hasAttribute('data-gn-id')) {
+    if (current.classList && (current.classList.contains('gn-a') || current.hasAttribute('data-gn-id'))) {
       console.log('🏷️ 跳过标注元素，从父元素开始生成路径');
       current = current.parentElement;
     }
     
-    while (current && current !== document.body) {
+    while (current && current !== document.body && current !== document.documentElement) {
       // 跳过标注相关的元素
-      if (current.classList.contains('gn-a') || 
+      if (current.classList && (
+          current.classList.contains('gn-a') || 
           current.hasAttribute('data-gn-id') ||
-          current.classList.contains('gn-note-badge-inline')) {
+          current.classList.contains('gn-note-badge-inline'))) {
         current = current.parentNode;
         continue;
       }
       
       let selector = current.tagName.toLowerCase();
       
-      if (current.id) {
+      if (current.id && !current.id.includes('glassnote') && !current.id.includes('gn-')) {
         selector += `#${current.id}`;
         path.unshift(selector);
         break; // ID是唯一的，可以停止
       }
       
-      if (current.className) {
-        const classes = Array.from(current.classList)
+      if (current.className && typeof current.className === 'string') {
+        const classes = current.className.split(' ')
           .filter(cls => 
+            cls && 
             !cls.startsWith('glassnote-') && 
             !cls.startsWith('gn-') &&
             cls !== 'gn-a'
@@ -1176,16 +1188,16 @@ class GlassNoteSystem {
         }
       }
       
-      // 添加位置索引
-      const siblings = Array.from(current.parentNode?.children || [])
-        .filter(sibling => 
-          sibling.tagName === current.tagName &&
-          !sibling.classList.contains('gn-a') &&
-          !sibling.hasAttribute('data-gn-id')
-        );
-      if (siblings.length > 1) {
-        const index = siblings.indexOf(current);
-        selector += `:nth-of-type(${index + 1})`;
+      // 添加位置索引 - 简化版本
+      if (current.parentNode && current.parentNode.children) {
+        const siblings = Array.from(current.parentNode.children)
+          .filter(sibling => sibling.tagName === current.tagName);
+        if (siblings.length > 1) {
+          const index = siblings.indexOf(current);
+          if (index >= 0) {
+            selector += `:nth-of-type(${index + 1})`;
+          }
+        }
       }
       
       path.unshift(selector);
@@ -1193,7 +1205,7 @@ class GlassNoteSystem {
     }
     
     const finalPath = path.join(' > ');
-    console.log('🔗 生成的清洁DOM路径:', finalPath);
+    console.log('🔗 生成DOM路径:', finalPath);
     return finalPath;
   }
 
@@ -1837,6 +1849,23 @@ class GlassNoteSystem {
       
       console.log('📦 获取到的页面数据:', pageData);
       
+      // 详细分析数据结构
+      if (pageData && pageData.annotations) {
+        console.log('📊 标注数据详细分析:');
+        pageData.annotations.forEach((annotation, index) => {
+          console.log(`标注 ${index + 1}:`, {
+            id: annotation.id,
+            type: annotation.type,
+            textLength: annotation.text?.length,
+            textPreview: annotation.text?.substring(0, 30),
+            domPath: annotation.domPath,
+            domPathLength: annotation.domPath?.length,
+            hasColor: !!annotation.color,
+            createdAt: annotation.createdAt
+          });
+        });
+      }
+      
       if (pageData) {
         // 加载标注
         if (pageData.annotations && pageData.annotations.length > 0) {
@@ -2009,34 +2038,59 @@ class GlassNoteSystem {
         return false;
       }
 
-      // 清理DOM路径中的标注元素
+      // 清理DOM路径中的标注元素 - 更宽松的清理策略
       let cleanedPath = domPath;
-      if (domPath.includes('span.gn-a') || domPath.includes('glassnote-annotation')) {
-        // 移除路径中的标注元素，获取父元素路径
+      const needsCleaning = domPath.includes('span.gn-a') || 
+                           domPath.includes('glassnote-annotation') ||
+                           domPath.includes('gn-base') ||
+                           domPath.includes('gn-highlight') ||
+                           domPath.includes('gn-bold') ||
+                           domPath.includes('gn-underline') ||
+                           domPath.includes('gn-orange') ||
+                           domPath.includes('gn-color');
+                           
+      if (needsCleaning) {
+        console.log('🧹 检测到路径包含标注元素，进行清理');
         const pathParts = domPath.split(' > ');
-        const cleanedParts = pathParts.filter(part => 
-          !part.includes('span.gn-a') && 
-          !part.includes('glassnote-annotation') &&
-          !part.includes('gn-base') &&
-          !part.includes('gn-highlight') &&
-          !part.includes('gn-bold') &&
-          !part.includes('gn-underline') &&
-          !part.includes('gn-orange') &&
-          !part.includes('gn-color')
-        );
+        const cleanedParts = pathParts.filter(part => {
+          const shouldExclude = part.includes('span.gn-a') || 
+                               part.includes('glassnote-annotation') ||
+                               part.includes('.gn-base') ||
+                               part.includes('.gn-highlight') ||
+                               part.includes('.gn-bold') ||
+                               part.includes('.gn-underline') ||
+                               part.includes('.gn-orange') ||
+                               part.includes('.gn-color');
+          return !shouldExclude;
+        });
         cleanedPath = cleanedParts.join(' > ');
-        console.log('🧹 清理后的DOM路径:', cleanedPath);
+        console.log('🧹 原路径:', domPath);
+        console.log('🧹 清理后:', cleanedPath);
       }
 
-      // 尝试通过清理后的DOM路径找到目标元素
+      // 尝试多种方式找到目标元素
       let targetElement;
+      
+      // 策略1: 尝试原始路径
       try {
-        targetElement = document.querySelector(cleanedPath);
+        targetElement = document.querySelector(domPath);
         if (targetElement) {
-          console.log('✅ 通过清理后的DOM路径找到目标元素:', cleanedPath);
+          console.log('✅ 通过原始DOM路径找到目标元素');
         }
       } catch (error) {
-        console.warn('❌ 清理后的DOM路径无效:', cleanedPath, error);
+        console.log('⚠️ 原始DOM路径查找失败:', error.message);
+      }
+      
+      // 策略2: 尝试清理后的路径
+      if (!targetElement && cleanedPath !== domPath) {
+        try {
+          targetElement = document.querySelector(cleanedPath);
+          if (targetElement) {
+            console.log('✅ 通过清理后的DOM路径找到目标元素:', cleanedPath);
+          }
+        } catch (error) {
+          console.warn('❌ 清理后的DOM路径查找失败:', cleanedPath, error);
+        }
       }
 
       // 如果清理后的路径还是找不到，尝试原路径的父元素

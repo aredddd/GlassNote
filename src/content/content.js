@@ -1140,7 +1140,21 @@ class GlassNoteSystem {
     const path = [];
     let current = element;
     
+    // 如果当前元素是标注元素，从其父元素开始
+    if (current.classList.contains('gn-a') || current.hasAttribute('data-gn-id')) {
+      console.log('🏷️ 跳过标注元素，从父元素开始生成路径');
+      current = current.parentElement;
+    }
+    
     while (current && current !== document.body) {
+      // 跳过标注相关的元素
+      if (current.classList.contains('gn-a') || 
+          current.hasAttribute('data-gn-id') ||
+          current.classList.contains('gn-note-badge-inline')) {
+        current = current.parentNode;
+        continue;
+      }
+      
       let selector = current.tagName.toLowerCase();
       
       if (current.id) {
@@ -1151,7 +1165,11 @@ class GlassNoteSystem {
       
       if (current.className) {
         const classes = Array.from(current.classList)
-          .filter(cls => !cls.startsWith('glassnote-'))
+          .filter(cls => 
+            !cls.startsWith('glassnote-') && 
+            !cls.startsWith('gn-') &&
+            cls !== 'gn-a'
+          )
           .join('.');
         if (classes) {
           selector += `.${classes}`;
@@ -1160,7 +1178,11 @@ class GlassNoteSystem {
       
       // 添加位置索引
       const siblings = Array.from(current.parentNode?.children || [])
-        .filter(sibling => sibling.tagName === current.tagName);
+        .filter(sibling => 
+          sibling.tagName === current.tagName &&
+          !sibling.classList.contains('gn-a') &&
+          !sibling.hasAttribute('data-gn-id')
+        );
       if (siblings.length > 1) {
         const index = siblings.indexOf(current);
         selector += `:nth-of-type(${index + 1})`;
@@ -1170,7 +1192,9 @@ class GlassNoteSystem {
       current = current.parentNode;
     }
     
-    return path.join(' > ');
+    const finalPath = path.join(' > ');
+    console.log('🔗 生成的清洁DOM路径:', finalPath);
+    return finalPath;
   }
 
 
@@ -1805,6 +1829,9 @@ class GlassNoteSystem {
       const url = this.currentUrl;
       console.log('🔄 开始加载标注数据，URL:', url);
       
+      // 首先清理页面上可能存在的旧标注
+      this.cleanupExistingAnnotations();
+      
       const result = await chrome.storage.local.get([url]);
       const pageData = result[url];
       
@@ -1843,6 +1870,48 @@ class GlassNoteSystem {
       }
     } catch (error) {
       console.error('❌ 加载标注失败:', error);
+    }
+  }
+
+  /**
+   * 清理页面上已存在的标注元素
+   */
+  cleanupExistingAnnotations() {
+    try {
+      // 清理旧的标注元素
+      const oldAnnotations = document.querySelectorAll('.gn-a, .glassnote-annotation, [data-gn-id], [data-glassnote-id]');
+      let cleanupCount = 0;
+      
+      oldAnnotations.forEach(annotation => {
+        try {
+          // 提取文本内容
+          const textContent = annotation.textContent;
+          const parent = annotation.parentNode;
+          
+          if (parent && textContent) {
+            // 用纯文本节点替换标注元素
+            const textNode = document.createTextNode(textContent);
+            parent.replaceChild(textNode, annotation);
+            cleanupCount++;
+          }
+        } catch (error) {
+          console.warn('清理标注元素失败:', error);
+        }
+      });
+      
+      // 清理便利贴角标
+      const oldBadges = document.querySelectorAll('.gn-note-badge-inline, .gn-note-badge');
+      oldBadges.forEach(badge => {
+        badge.remove();
+        cleanupCount++;
+      });
+      
+      if (cleanupCount > 0) {
+        console.log(`🧹 清理了 ${cleanupCount} 个旧的标注元素`);
+      }
+      
+    } catch (error) {
+      console.error('❌ 清理旧标注失败:', error);
     }
   }
 
@@ -1928,28 +1997,73 @@ class GlassNoteSystem {
       
       console.log('🔄 尝试恢复标注:', { id, type, text: text?.substring(0, 50), domPath });
       
+      // 检查是否已经存在该标注
+      const existingAnnotation = document.querySelector(`[data-gn-id="${id.split('-')[1] || id}"]`);
+      if (existingAnnotation) {
+        console.log('⚠️ 标注已存在，跳过恢复:', id);
+        return true;
+      }
+      
       if (!domPath) {
         console.warn('❌ 标注缺少DOM路径，跳过:', id);
         return false;
       }
 
-      // 尝试通过DOM路径找到目标元素
+      // 清理DOM路径中的标注元素
+      let cleanedPath = domPath;
+      if (domPath.includes('span.gn-a') || domPath.includes('glassnote-annotation')) {
+        // 移除路径中的标注元素，获取父元素路径
+        const pathParts = domPath.split(' > ');
+        const cleanedParts = pathParts.filter(part => 
+          !part.includes('span.gn-a') && 
+          !part.includes('glassnote-annotation') &&
+          !part.includes('gn-base') &&
+          !part.includes('gn-highlight') &&
+          !part.includes('gn-bold') &&
+          !part.includes('gn-underline') &&
+          !part.includes('gn-orange') &&
+          !part.includes('gn-color')
+        );
+        cleanedPath = cleanedParts.join(' > ');
+        console.log('🧹 清理后的DOM路径:', cleanedPath);
+      }
+
+      // 尝试通过清理后的DOM路径找到目标元素
       let targetElement;
       try {
-        targetElement = document.querySelector(domPath);
+        targetElement = document.querySelector(cleanedPath);
         if (targetElement) {
-          console.log('✅ 通过DOM路径找到目标元素:', domPath);
+          console.log('✅ 通过清理后的DOM路径找到目标元素:', cleanedPath);
         }
       } catch (error) {
-        console.warn('❌ DOM路径无效:', domPath, error);
+        console.warn('❌ 清理后的DOM路径无效:', cleanedPath, error);
+      }
+
+      // 如果清理后的路径还是找不到，尝试原路径的父元素
+      if (!targetElement && domPath.includes(' > ')) {
+        const pathParts = domPath.split(' > ');
+        // 逐步向上查找父元素
+        for (let i = pathParts.length - 2; i >= 0; i--) {
+          const parentPath = pathParts.slice(0, i + 1).join(' > ');
+          try {
+            targetElement = document.querySelector(parentPath);
+            if (targetElement) {
+              console.log('✅ 通过父元素路径找到目标:', parentPath);
+              break;
+            }
+          } catch (error) {
+            // 继续尝试下一个父元素
+            continue;
+          }
+        }
       }
 
       if (!targetElement) {
-        console.log('⚠️ DOM路径失效，尝试通过文本查找:', text?.substring(0, 30));
-        // 如果路径找不到，尝试通过文本内容查找
-        targetElement = this.findElementByText(text);
+        console.log('⚠️ DOM路径完全失效，尝试通过文本查找:', text?.substring(0, 30));
+        // 使用改进的文本查找
+        targetElement = this.findElementByTextImproved(text);
         if (targetElement) {
-          console.log('✅ 通过文本内容找到目标元素');
+          console.log('✅ 通过改进的文本查找找到目标元素');
         }
       }
 
@@ -2034,6 +2148,91 @@ class GlassNoteSystem {
       if (node.textContent.includes(text) && 
           !node.parentElement.closest('.gn-a')) {
         return node.parentElement;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * 改进的文本查找函数
+   */
+  findElementByTextImproved(text) {
+    if (!text) return null;
+    
+    // 清理文本中的换行符和多余空格
+    const cleanText = text.replace(/\s+/g, ' ').trim();
+    const textParts = cleanText.split(' ');
+    
+    console.log('🔍 改进文本查找:', { cleanText: cleanText.substring(0, 50), textParts: textParts.slice(0, 3) });
+    
+    // 尝试不同的查找策略
+    const strategies = [
+      // 策略1: 完整文本匹配
+      () => this.findByExactText(cleanText),
+      // 策略2: 前半部分文本匹配
+      () => this.findByExactText(cleanText.substring(0, Math.floor(cleanText.length / 2))),
+      // 策略3: 前几个词匹配
+      () => this.findByExactText(textParts.slice(0, Math.min(3, textParts.length)).join(' ')),
+      // 策略4: 第一个词匹配
+      () => this.findByExactText(textParts[0]),
+      // 策略5: 包含关系匹配
+      () => this.findByContainText(cleanText)
+    ];
+    
+    for (let i = 0; i < strategies.length; i++) {
+      const element = strategies[i]();
+      if (element) {
+        console.log(`✅ 找到目标元素 strategy ${i + 1}`);
+        return element;
+      }
+    }
+    
+    console.log('❌ 所有查找策略都失败了');
+    return null;
+  }
+
+  /**
+   * 精确文本匹配
+   */
+  findByExactText(text) {
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      const nodeText = node.textContent.replace(/\s+/g, ' ').trim();
+      if (nodeText.includes(text)) {
+        const element = node.parentElement;
+        if (element && !this.isElementExcluded({ element })) {
+          // 检查元素是否包含现有标注
+          if (!element.querySelector('.gn-a')) {
+            return element;
+          }
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * 包含关系文本匹配
+   */
+  findByContainText(text) {
+    const allElements = document.querySelectorAll('p, div, span, li, td, th, h1, h2, h3, h4, h5, h6');
+    
+    for (const element of allElements) {
+      if (this.isElementExcluded({ element })) continue;
+      if (element.querySelector('.gn-a')) continue; // 跳过已有标注的元素
+      
+      const elementText = element.textContent.replace(/\s+/g, ' ').trim();
+      if (elementText.includes(text) && elementText.length < text.length * 3) {
+        return element;
       }
     }
     

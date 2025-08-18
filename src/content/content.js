@@ -2027,9 +2027,11 @@ class GlassNoteSystem {
       console.log('🔄 尝试恢复标注:', { id, type, text: text?.substring(0, 50), domPath });
       
       // 检查是否已经存在该标注
-      const existingAnnotation = document.querySelector(`[data-gn-id="${id.split('-')[1] || id}"]`);
+      // 从完整ID中提取数字部分：glassnote-1-1755500554772 → 1-1755500554772
+      const checkId = id.startsWith('glassnote-') ? id.substring(10) : id;
+      const existingAnnotation = document.querySelector(`[data-gn-id="${checkId}"]`);
       if (existingAnnotation) {
-        console.log('⚠️ 标注已存在，跳过恢复:', id);
+        console.log('⚠️ 标注已存在，跳过恢复:', id, '→', checkId);
         return true;
       }
       
@@ -2135,8 +2137,12 @@ class GlassNoteSystem {
       // 创建标注包装元素（使用新的简化格式）
       const annotationSpan = document.createElement('span');
       annotationSpan.className = 'gn-a gn-base';
-      annotationSpan.setAttribute('data-gn-id', id.split('-')[1] || id); // 只保留数字部分
+      // 从完整ID中提取数字部分：glassnote-1-1755500554772 → 1-1755500554772
+      const shortId = id.startsWith('glassnote-') ? id.substring(10) : id;
+      annotationSpan.setAttribute('data-gn-id', shortId);
       annotationSpan.setAttribute('data-gn-t', type.charAt(0)); // 只保留类型首字母
+      
+      console.log('🏷️ 设置标注ID:', { originalId: id, shortId: shortId });
       
       if (color) {
         annotationSpan.setAttribute('data-gn-c', color);

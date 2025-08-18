@@ -1,45 +1,186 @@
 /**
- * GlassNote 内容脚本 - 网页图层标注系统
- * 负责在目标网页上创建图层覆盖和处理用户交互
+ * GlassNote 内容脚本 - 基于DOM的网页标注系统
+ * 负责检测路由变化、管理DOM标注和用户交互
  */
 
-class GlassNoteLayer {
+class GlassNoteSystem {
   constructor() {
     this.isEnabled = false;
     this.selectedText = '';
-    this.layerElements = new Map(); // 存储所有图层元素
+    this.selectedRange = null;
+    this.annotations = new Map(); // 存储所有标注数据
+    this.currentUrl = window.location.href;
+    this.annotationCounter = 0;
+    
     this.init();
   }
 
   /**
-   * 初始化图层系统
+   * 初始化系统
    */
-  init() {
-    this.createLayerContainer();
+  async init() {
+    // 不自动启动，等待路由变化或用户主动启用
+    this.setupRouteDetection();
     this.setupEventListeners();
-    this.loadStoredAnnotations();
-    console.log('GlassNote 图层系统已初始化');
+    await this.checkCurrentPage();
+    console.log('GlassNote 系统已初始化，等待路由变化检测');
   }
 
   /**
-   * 创建图层容器
+   * 设置路由变化检测
    */
-  createLayerContainer() {
-    // 创建主图层容器
-    this.layerContainer = document.createElement('div');
-    this.layerContainer.id = 'glassnote-layer';
-    this.layerContainer.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 999999;
-    `;
-    document.body.appendChild(this.layerContainer);
+  setupRouteDetection() {
+    // 监听浏览器历史变化
+    window.addEventListener('popstate', () => {
+      this.handleRouteChange();
+    });
 
-    // 创建工具栏容器
+    // 监听pushState和replaceState（SPA路由变化）
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+    
+    history.pushState = function(...args) {
+      originalPushState.apply(history, args);
+      setTimeout(() => glassNote.handleRouteChange(), 100);
+    };
+    
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(history, args);
+      setTimeout(() => glassNote.handleRouteChange(), 100);
+    };
+
+    // 监听hash变化
+    window.addEventListener('hashchange', () => {
+      this.handleRouteChange();
+    });
+  }
+
+  /**
+   * 处理路由变化
+   */
+  async handleRouteChange() {
+    const newUrl = window.location.href;
+    if (newUrl === this.currentUrl) return;
+    
+    console.log('检测到路由变化:', this.currentUrl, '->', newUrl);
+    
+    // 清除当前页面的标注
+    this.clearCurrentAnnotations();
+    
+    // 更新当前URL
+    this.currentUrl = newUrl;
+    
+    // 检查新页面是否有标注数据
+    await this.checkCurrentPage();
+  }
+
+  /**
+   * 检查当前页面是否有标注数据
+   */
+  async checkCurrentPage() {
+    try {
+      const result = await chrome.storage.local.get([this.currentUrl]);
+      const pageData = result[this.currentUrl];
+      
+      if (pageData && pageData.annotations && pageData.annotations.length > 0) {
+        console.log(`发现${pageData.annotations.length}个标注，询问是否加载`);
+        this.showLoadConfirmDialog(pageData.annotations.length);
+      }
+    } catch (error) {
+      console.error('检查页面数据失败:', error);
+    }
+  }
+
+  /**
+   * 显示加载确认对话框
+   */
+  showLoadConfirmDialog(annotationCount) {
+    // 创建简洁的确认对话框
+    const dialog = document.createElement('div');
+    dialog.id = 'glassnote-load-dialog';
+    dialog.style.cssText = `
+      position: fixed !important;
+      top: 20px !important;
+      right: 20px !important;
+      background: white !important;
+      border: 2px solid #4a90e2 !important;
+      border-radius: 8px !important;
+      padding: 16px !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2) !important;
+      z-index: 2147483647 !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      font-size: 14px !important;
+      color: #333 !important;
+      max-width: 300px !important;
+      animation: slideInFromRight 0.3s ease-out !important;
+    `;
+    
+    dialog.innerHTML = `
+      <div style="margin-bottom: 12px !important; font-weight: 600 !important; color: #2c3e50 !important;">
+        🔍 发现标注数据
+      </div>
+      <div style="margin-bottom: 16px !important; line-height: 1.4 !important;">
+        此页面有 <strong>${annotationCount}</strong> 个标注，是否加载显示？
+      </div>
+      <div style="display: flex !important; gap: 8px !important; justify-content: flex-end !important;">
+        <button id="glassnote-load-no" style="
+          padding: 6px 12px !important;
+          border: 1px solid #ddd !important;
+          background: white !important;
+          border-radius: 4px !important;
+          cursor: pointer !important;
+          font-size: 12px !important;
+        ">稍后</button>
+        <button id="glassnote-load-yes" style="
+          padding: 6px 12px !important;
+          border: none !important;
+          background: #4a90e2 !important;
+          color: white !important;
+          border-radius: 4px !important;
+          cursor: pointer !important;
+          font-size: 12px !important;
+        ">加载标注</button>
+      </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    // 绑定按钮事件
+    document.getElementById('glassnote-load-yes').addEventListener('click', () => {
+      dialog.remove();
+      this.enableGlassNote();
+    });
+    
+    document.getElementById('glassnote-load-no').addEventListener('click', () => {
+      dialog.remove();
+    });
+    
+    // 5秒后自动关闭
+    setTimeout(() => {
+      if (dialog.parentNode) {
+        dialog.remove();
+      }
+    }, 5000);
+  }
+
+  /**
+   * 启用GlassNote标注系统
+   */
+  async enableGlassNote() {
+    if (this.isEnabled) return;
+    
+    this.isEnabled = true;
+    this.createToolbar();
+    await this.loadAnnotations();
+    console.log('GlassNote 已启用');
+  }
+
+  /**
+   * 创建工具栏容器
+   */
+  createToolbar() {
+    if (this.toolbarContainer) return;
+    
     this.toolbarContainer = document.createElement('div');
     this.toolbarContainer.id = 'glassnote-toolbar';
     this.toolbarContainer.style.cssText = `
@@ -67,6 +208,8 @@ class GlassNoteLayer {
     // 防抖处理文本选择，避免频繁触发
     let selectionTimeout;
     document.addEventListener('mouseup', (e) => {
+      if (!this.isEnabled) return; // 只有启用时才处理
+      
       clearTimeout(selectionTimeout);
       selectionTimeout = setTimeout(() => this.handleTextSelection(e), 50);
     });
@@ -79,8 +222,10 @@ class GlassNoteLayer {
       }
     });
 
-    // 点击空白处隐藏工具栏（使用事件委托优化性能）
+    // 点击空白处隐藏工具栏（只有启用时才需要）
     document.addEventListener('click', (e) => {
+      if (!this.isEnabled || !this.toolbarContainer) return;
+      
       if (!this.toolbarContainer.contains(e.target) && 
           !e.target.closest('.glassnote-annotation') &&
           !e.target.closest('.glassnote-note-badge')) {
@@ -90,7 +235,9 @@ class GlassNoteLayer {
 
     // 监听滚动事件，隐藏工具栏避免位置错乱
     document.addEventListener('scroll', () => {
-      this.hideToolbar();
+      if (this.isEnabled && this.toolbarContainer) {
+        this.hideToolbar();
+      }
     }, { passive: true });
   }
 
@@ -126,16 +273,27 @@ class GlassNoteLayer {
       return;
     }
 
+    // 检查是否已经在标注元素内（避免重复标注）
+    const isInAnnotation = container.nodeType === Node.TEXT_NODE ?
+      container.parentElement?.closest('.glassnote-annotation') :
+      container.closest?.('.glassnote-annotation');
+    
+    if (isInAnnotation) {
+      this.hideToolbar();
+      return;
+    }
+
+    // 保存选择范围
+    this.selectedRange = range.cloneRange();
+    
     // 显示标注工具栏
-    this.showToolbar(e.pageX, e.pageY, range);
+    this.showToolbar(e.pageX, e.pageY);
   }
 
   /**
    * 显示标注工具栏
    */
-  showToolbar(x, y, range) {
-    this.currentRange = range;
-    
+  showToolbar(x, y) {    
     this.toolbarContainer.innerHTML = `
       <div class="glassnote-toolbar-buttons">
         <button id="highlight-btn" title="高亮标记">🖍️</button>
@@ -171,7 +329,8 @@ class GlassNoteLayer {
     });
 
     document.getElementById('note-btn')?.addEventListener('click', () => {
-      this.createStickyNote();
+      // 暂时禁用便利贴功能，专注于基础标注
+      alert('便利贴功能开发中，敬请期待！');
     });
 
     document.getElementById('underline-btn')?.addEventListener('click', () => {
@@ -192,220 +351,201 @@ class GlassNoteLayer {
   }
 
   /**
-   * 创建标注
+   * 创建DOM内联标注
    */
   createAnnotation(type, color = null) {
-    if (!this.currentRange) return;
+    if (!this.selectedRange) return;
 
-    const annotationId = `annotation-${Date.now()}`;
-    
-    // 获取选中文本的所有矩形区域（支持跨行选择）
-    const rects = this.currentRange.getClientRects();
-    const allPositions = [];
-    
-    // 为每个矩形创建标注元素
-    for (let i = 0; i < rects.length; i++) {
-      const rect = rects[i];
-      if (rect.width === 0 || rect.height === 0) continue; // 跳过空矩形
+    try {
+      const annotationId = `glassnote-${++this.annotationCounter}-${Date.now()}`;
+      const selectedText = this.selectedText;
       
-      const layerElement = document.createElement('div');
-      layerElement.className = 'glassnote-annotation';
-      layerElement.id = `${annotationId}-${i}`;
-      layerElement.style.cssText = `
-        position: absolute !important;
-        left: ${rect.left + window.scrollX}px !important;
-        top: ${rect.top + window.scrollY}px !important;
-        width: ${rect.width}px !important;
-        height: ${rect.height}px !important;
-        pointer-events: none !important;
-        border-radius: 3px !important;
-        box-sizing: border-box !important;
-      `;
-
-      // 根据类型设置样式
-      switch (type) {
-        case 'highlight':
-          layerElement.style.background = color || '#ffff00';
-          layerElement.style.opacity = '0.3';
-          break;
-        case 'bold':
-          // 改进加粗效果：使用阴影和边框组合
-          layerElement.style.background = 'rgba(255, 165, 0, 0.1)';
-          layerElement.style.border = '1px solid #ff8c00';
-          layerElement.style.boxShadow = 'inset 0 0 0 1px rgba(255, 140, 0, 0.3)';
-          break;
-        case 'underline':
-          layerElement.style.borderBottom = '2px solid #333';
-          break;
-        case 'color':
-          layerElement.style.background = color;
-          layerElement.style.opacity = '0.2';
-          layerElement.style.border = `1px solid ${color}`;
-          break;
+      // 创建标注包装元素
+      const annotationSpan = document.createElement('span');
+      annotationSpan.className = 'glassnote-annotation';
+      annotationSpan.setAttribute('data-glassnote-id', annotationId);
+      annotationSpan.setAttribute('data-glassnote-type', type);
+      annotationSpan.setAttribute('data-glassnote-text', selectedText);
+      
+      if (color) {
+        annotationSpan.setAttribute('data-glassnote-color', color);
       }
 
-      this.layerContainer.appendChild(layerElement);
+      // 应用CSS样式类
+      annotationSpan.classList.add(`glassnote-${type}`);
       
-      // 记录位置信息
-      allPositions.push({
-        left: rect.left + window.scrollX,
-        top: rect.top + window.scrollY,
-        width: rect.width,
-        height: rect.height
-      });
+      // 设置内联样式
+      this.applyAnnotationStyle(annotationSpan, type, color);
+
+      // 用标注元素包装选中的内容
+      try {
+        this.selectedRange.surroundContents(annotationSpan);
+      } catch (error) {
+        // 如果不能直接包装（跨越多个元素），则提取内容并包装
+        const contents = this.selectedRange.extractContents();
+        annotationSpan.appendChild(contents);
+        this.selectedRange.insertNode(annotationSpan);
+      }
+
+      // 生成DOM路径用于后续定位
+      const domPath = this.generateDOMPath(annotationSpan);
+      
+      // 存储标注数据
+      const annotationData = {
+        id: annotationId,
+        type: type,
+        text: selectedText,
+        color: color,
+        domPath: domPath,
+        createdAt: new Date().toISOString()
+      };
+
+      this.annotations.set(annotationId, annotationData);
+      this.saveAnnotation(annotationData);
+
+      console.log('创建内联标注:', annotationData);
+      
+    } catch (error) {
+      console.error('创建标注失败:', error);
     }
 
-    // 存储标注数据
-    const annotationData = {
-      id: annotationId,
-      type: type,
-      text: this.selectedText,
-      color: color,
-      positions: allPositions, // 存储多个位置
-      createdAt: new Date().toISOString()
-    };
-
-    this.layerElements.set(annotationId, annotationData);
-    this.saveAnnotation(annotationData);
-
     this.hideToolbar();
     window.getSelection().removeAllRanges();
   }
 
   /**
-   * 创建便利贴
+   * 应用标注样式
    */
-  createStickyNote() {
-    const noteContent = prompt('请输入便利贴内容：', '');
-    if (!noteContent || !this.currentRange) return;
-
-    const noteId = `note-${Date.now()}`;
-    const rect = this.currentRange.getBoundingClientRect();
-    
-    // 创建便利贴角标
-    const badge = document.createElement('div');
-    badge.className = 'glassnote-note-badge';
-    badge.id = `badge-${noteId}`;
-    badge.textContent = '📝';
-    badge.style.cssText = `
-      position: absolute;
-      left: ${rect.right + window.scrollX + 5}px;
-      top: ${rect.top + window.scrollY}px;
-      width: 20px;
-      height: 20px;
-      background: #ff6b35;
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 12px;
-      pointer-events: auto;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  applyAnnotationStyle(element, type, color) {
+    const baseStyle = `
+      transition: all 0.2s ease !important;
+      cursor: pointer !important;
     `;
+    
+    switch (type) {
+      case 'highlight':
+        element.style.cssText = baseStyle + `
+          background-color: ${color || '#ffff00'} !important;
+          padding: 1px 2px !important;
+          border-radius: 2px !important;
+        `;
+        break;
+      case 'bold':
+        element.style.cssText = baseStyle + `
+          background: rgba(255, 165, 0, 0.15) !important;
+          border: 1px solid #ff8c00 !important;
+          padding: 1px 3px !important;
+          border-radius: 3px !important;
+          font-weight: bold !important;
+        `;
+        break;
+      case 'underline':
+        element.style.cssText = baseStyle + `
+          border-bottom: 2px solid #333 !important;
+          padding-bottom: 1px !important;
+        `;
+        break;
+      case 'color':
+        element.style.cssText = baseStyle + `
+          background-color: ${color} !important;
+          color: white !important;
+          padding: 1px 3px !important;
+          border-radius: 2px !important;
+        `;
+        break;
+    }
 
-    badge.addEventListener('click', () => {
-      this.showNotePopup(noteId, noteContent);
+    // 添加悬停效果
+    element.addEventListener('mouseenter', () => {
+      element.style.opacity = '0.8';
     });
-
-    this.layerContainer.appendChild(badge);
-
-    // 存储便利贴数据
-    const noteData = {
-      id: noteId,
-      type: 'note',
-      text: this.selectedText,
-      content: noteContent,
-      position: {
-        left: rect.right + window.scrollX + 5,
-        top: rect.top + window.scrollY,
-        width: 20,
-        height: 20
-      },
-      createdAt: new Date().toISOString()
-    };
-
-    this.layerElements.set(noteId, noteData);
-    this.saveAnnotation(noteData);
-
-    this.hideToolbar();
-    window.getSelection().removeAllRanges();
+    
+    element.addEventListener('mouseleave', () => {
+      element.style.opacity = '1';
+    });
   }
 
   /**
-   * 显示便利贴弹窗
+   * 生成DOM路径用于定位元素
    */
-  showNotePopup(noteId, content) {
-    const popup = document.createElement('div');
-    popup.className = 'glassnote-note-popup';
-    popup.style.cssText = `
-      position: fixed;
-      background: #fffacd;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 12px;
-      max-width: 300px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      z-index: 1000001;
-      pointer-events: auto;
-    `;
+  generateDOMPath(element) {
+    const path = [];
+    let current = element;
     
-    popup.innerHTML = `
-      <div class="note-header" style="font-weight: bold; margin-bottom: 8px;">📝 便利贴</div>
-      <div class="note-content" style="margin-bottom: 10px; white-space: pre-wrap;">${content}</div>
-      <div class="note-actions">
-        <button onclick="this.parentElement.parentElement.remove()" style="padding: 4px 8px; font-size: 12px;">关闭</button>
-      </div>
-    `;
-
-    // 定位弹窗
-    const badge = document.getElementById(`badge-${noteId}`);
-    const badgeRect = badge.getBoundingClientRect();
-    popup.style.left = `${badgeRect.right + 10}px`;
-    popup.style.top = `${badgeRect.top}px`;
-
-    document.body.appendChild(popup);
-
-    // 3秒后自动关闭
-    setTimeout(() => {
-      if (popup.parentNode) {
-        popup.remove();
+    while (current && current !== document.body) {
+      let selector = current.tagName.toLowerCase();
+      
+      if (current.id) {
+        selector += `#${current.id}`;
+        path.unshift(selector);
+        break; // ID是唯一的，可以停止
       }
-    }, 3000);
+      
+      if (current.className) {
+        const classes = Array.from(current.classList)
+          .filter(cls => !cls.startsWith('glassnote-'))
+          .join('.');
+        if (classes) {
+          selector += `.${classes}`;
+        }
+      }
+      
+      // 添加位置索引
+      const siblings = Array.from(current.parentNode?.children || [])
+        .filter(sibling => sibling.tagName === current.tagName);
+      if (siblings.length > 1) {
+        const index = siblings.indexOf(current);
+        selector += `:nth-of-type(${index + 1})`;
+      }
+      
+      path.unshift(selector);
+      current = current.parentNode;
+    }
+    
+    return path.join(' > ');
   }
+
+
+
+
 
   /**
    * 隐藏工具栏
    */
   hideToolbar() {
-    this.toolbarContainer.style.display = 'none';
-    this.currentRange = null;
+    if (this.toolbarContainer) {
+      this.toolbarContainer.style.display = 'none';
+    }
+    this.selectedRange = null;
   }
 
   /**
    * 切换 GlassNote 开关
    */
   toggleGlassNote() {
-    this.isEnabled = !this.isEnabled;
-    this.layerContainer.style.display = this.isEnabled ? 'block' : 'none';
-    console.log(`GlassNote ${this.isEnabled ? '已启用' : '已禁用'}`);
-  }
-
-  /**
-   * 清除所有标注
-   */
-  clearAllAnnotations() {
-    try {
-      // 清除所有图层元素
-      this.layerContainer.innerHTML = '';
-      
-      // 清除内存中的数据
-      this.layerElements.clear();
-      
-      console.log('已清除所有标注');
-    } catch (error) {
-      console.error('清除标注失败:', error);
+    if (this.isEnabled) {
+      // 禁用：隐藏所有标注
+      const annotations = document.querySelectorAll('.glassnote-annotation');
+      annotations.forEach(annotation => {
+        annotation.style.display = 'none';
+      });
+      this.hideToolbar();
+      this.isEnabled = false;
+      console.log('GlassNote 已禁用（标注已隐藏）');
+    } else {
+      // 启用：显示所有标注或启用系统
+      const annotations = document.querySelectorAll('.glassnote-annotation');
+      if (annotations.length > 0) {
+        // 已有标注，直接显示
+        annotations.forEach(annotation => {
+          annotation.style.display = '';
+        });
+        this.isEnabled = true;
+        console.log('GlassNote 已启用（显示现有标注）');
+      } else {
+        // 没有标注，启用系统
+        this.enableGlassNote();
+      }
     }
   }
 
@@ -414,11 +554,15 @@ class GlassNoteLayer {
    */
   async saveAnnotation(annotationData) {
     try {
-      const url = window.location.href;
+      const url = this.currentUrl;
       const result = await chrome.storage.local.get([url]);
-      const pageData = result[url] || { url: url, elements: [], lastModified: new Date().toISOString() };
+      const pageData = result[url] || { 
+        url: url, 
+        annotations: [], 
+        lastModified: new Date().toISOString() 
+      };
       
-      pageData.elements.push(annotationData);
+      pageData.annotations.push(annotationData);
       pageData.lastModified = new Date().toISOString();
       
       await chrome.storage.local.set({ [url]: pageData });
@@ -429,19 +573,22 @@ class GlassNoteLayer {
   }
 
   /**
-   * 加载已存储的标注
+   * 加载当前页面的标注
    */
-  async loadStoredAnnotations() {
+  async loadAnnotations() {
     try {
-      const url = window.location.href;
+      const url = this.currentUrl;
       const result = await chrome.storage.local.get([url]);
       const pageData = result[url];
       
-      if (pageData && pageData.elements) {
-        pageData.elements.forEach(annotation => {
-          this.restoreAnnotation(annotation);
-        });
-        console.log(`已加载 ${pageData.elements.length} 个标注`);
+      if (pageData && pageData.annotations) {
+        let successCount = 0;
+        for (const annotationData of pageData.annotations) {
+          if (await this.restoreAnnotation(annotationData)) {
+            successCount++;
+          }
+        }
+        console.log(`已加载 ${successCount}/${pageData.annotations.length} 个标注`);
       }
     } catch (error) {
       console.error('加载标注失败:', error);
@@ -449,95 +596,135 @@ class GlassNoteLayer {
   }
 
   /**
-   * 恢复标注元素
+   * 恢复DOM标注
    */
-  restoreAnnotation(annotationData) {
-    const { id, type, color, position, positions, content } = annotationData;
-    
-    if (type === 'note') {
-      // 恢复便利贴（使用第一个位置或单一位置）
-      const pos = position || (positions && positions[0]);
-      if (!pos) return;
+  async restoreAnnotation(annotationData) {
+    try {
+      const { id, type, text, color, domPath } = annotationData;
       
-      const badge = document.createElement('div');
-      badge.className = 'glassnote-note-badge';
-      badge.id = `badge-${id}`;
-      badge.textContent = '📝';
-      badge.style.cssText = `
-        position: absolute !important;
-        left: ${pos.left}px !important;
-        top: ${pos.top}px !important;
-        width: 20px !important;
-        height: 20px !important;
-        background: #ff6b35 !important;
-        color: white !important;
-        border-radius: 50% !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        cursor: pointer !important;
-        font-size: 12px !important;
-        pointer-events: auto !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-        z-index: 999999 !important;
-      `;
-      
-      badge.addEventListener('click', () => {
-        this.showNotePopup(id, content);
-      });
-      
-      this.layerContainer.appendChild(badge);
-    } else {
-      // 恢复其他类型标注（支持多位置）
-      const positionsArray = positions || (position ? [position] : []);
-      
-      positionsArray.forEach((pos, index) => {
-        const layerElement = document.createElement('div');
-        layerElement.className = 'glassnote-annotation';
-        layerElement.id = `${id}-${index}`;
-        layerElement.style.cssText = `
-          position: absolute !important;
-          left: ${pos.left}px !important;
-          top: ${pos.top}px !important;
-          width: ${pos.width}px !important;
-          height: ${pos.height}px !important;
-          pointer-events: none !important;
-          border-radius: 3px !important;
-          box-sizing: border-box !important;
-        `;
+      if (!domPath) {
+        console.warn('标注缺少DOM路径，跳过:', id);
+        return false;
+      }
 
-        // 设置样式
-        switch (type) {
-          case 'highlight':
-            layerElement.style.background = color || '#ffff00';
-            layerElement.style.opacity = '0.3';
-            break;
-          case 'bold':
-            // 使用改进的加粗效果
-            layerElement.style.background = 'rgba(255, 165, 0, 0.1)';
-            layerElement.style.border = '1px solid #ff8c00';
-            layerElement.style.boxShadow = 'inset 0 0 0 1px rgba(255, 140, 0, 0.3)';
-            break;
-          case 'underline':
-            layerElement.style.borderBottom = '2px solid #333';
-            break;
-          case 'color':
-            layerElement.style.background = color;
-            layerElement.style.opacity = '0.2';
-            layerElement.style.border = `1px solid ${color}`;
-            break;
+      // 尝试通过DOM路径找到目标元素
+      let targetElement;
+      try {
+        targetElement = document.querySelector(domPath);
+      } catch (error) {
+        console.warn('DOM路径无效:', domPath, error);
+      }
+
+      if (!targetElement) {
+        // 如果路径找不到，尝试通过文本内容查找
+        targetElement = this.findElementByText(text);
+      }
+
+      if (!targetElement) {
+        console.warn('无法找到标注目标元素:', id, text);
+        return false;
+      }
+
+      // 创建标注包装元素
+      const annotationSpan = document.createElement('span');
+      annotationSpan.className = 'glassnote-annotation';
+      annotationSpan.classList.add(`glassnote-${type}`);
+      annotationSpan.setAttribute('data-glassnote-id', id);
+      annotationSpan.setAttribute('data-glassnote-type', type);
+      annotationSpan.setAttribute('data-glassnote-text', text);
+      
+      if (color) {
+        annotationSpan.setAttribute('data-glassnote-color', color);
+      }
+
+      // 应用样式
+      this.applyAnnotationStyle(annotationSpan, type, color);
+
+      // 包装目标内容
+      const textContent = targetElement.textContent;
+      if (textContent.includes(text)) {
+        const startIndex = textContent.indexOf(text);
+        const endIndex = startIndex + text.length;
+        
+        const beforeText = textContent.substring(0, startIndex);
+        const afterText = textContent.substring(endIndex);
+        
+        // 重构DOM结构
+        targetElement.innerHTML = '';
+        if (beforeText) {
+          targetElement.appendChild(document.createTextNode(beforeText));
         }
+        
+        annotationSpan.textContent = text;
+        targetElement.appendChild(annotationSpan);
+        
+        if (afterText) {
+          targetElement.appendChild(document.createTextNode(afterText));
+        }
+        
+        this.annotations.set(id, annotationData);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('恢复标注失败:', error);
+      return false;
+    }
+  }
 
-        this.layerContainer.appendChild(layerElement);
-      });
+  /**
+   * 通过文本内容查找元素
+   */
+  findElementByText(text) {
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+
+    let node;
+    while (node = walker.nextNode()) {
+      if (node.textContent.includes(text) && 
+          !node.parentElement.closest('.glassnote-annotation')) {
+        return node.parentElement;
+      }
     }
     
-    this.layerElements.set(id, annotationData);
+    return null;
+  }
+
+  /**
+   * 清除当前页面的所有标注
+   */
+  clearCurrentAnnotations() {
+    try {
+      // 移除DOM中的所有标注元素
+      const annotations = document.querySelectorAll('.glassnote-annotation');
+      annotations.forEach(annotation => {
+        // 如果标注包装了其他内容，需要解开包装
+        if (annotation.parentNode) {
+          const textContent = annotation.textContent;
+          annotation.parentNode.replaceChild(document.createTextNode(textContent), annotation);
+        }
+      });
+
+      // 清除内存中的数据
+      this.annotations.clear();
+      
+      // 隐藏工具栏
+      this.hideToolbar();
+      
+      console.log('已清除当前页面的所有标注');
+    } catch (error) {
+      console.error('清除标注失败:', error);
+    }
   }
 }
 
 // 初始化 GlassNote
-const glassNote = new GlassNoteLayer();
+const glassNote = new GlassNoteSystem();
 
 // 监听来自扩展的消息
 chrome.runtime.onMessage?.addListener((request, sender, sendResponse) => {
@@ -551,7 +738,7 @@ chrome.runtime.onMessage?.addListener((request, sender, sendResponse) => {
         console.log(`切换到${request.mode}模式`);
         break;
       case 'clearAll':
-        glassNote.clearAllAnnotations();
+        glassNote.clearCurrentAnnotations();
         break;
       default:
         console.warn('未知的消息action:', request.action);

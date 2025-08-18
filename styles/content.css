@@ -84,6 +84,306 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+.gn-note-badge {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 便利贴编辑器样式 */
+.gn-note-editor-content {
+  background: white !important;
+  border-radius: 12px !important;
+  width: 600px !important;
+  max-width: 90vw !important;
+  max-height: 80vh !important;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3) !important;
+  overflow: hidden !important;
+  animation: gn-note-fade-in 0.3s ease !important;
+}
+
+@keyframes gn-note-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.gn-note-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  padding: 16px 20px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+
+.gn-note-header h3 {
+  margin: 0 !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.gn-note-close {
+  background: none !important;
+  border: none !important;
+  color: white !important;
+  font-size: 24px !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.gn-note-close:hover {
+  background: rgba(255,255,255,0.2) !important;
+}
+
+.gn-note-body {
+  padding: 0 !important;
+}
+
+.gn-note-tabs {
+  display: flex !important;
+  border-bottom: 1px solid #eee !important;
+  background: #f8f9fa !important;
+}
+
+.gn-note-tab {
+  background: none !important;
+  border: none !important;
+  padding: 12px 24px !important;
+  cursor: pointer !important;
+  font-size: 14px !important;
+  color: #666 !important;
+  transition: all 0.2s ease !important;
+  border-bottom: 3px solid transparent !important;
+}
+
+.gn-note-tab.active {
+  color: #667eea !important;
+  background: white !important;
+  border-bottom-color: #667eea !important;
+}
+
+.gn-note-tab:hover {
+  background: #f0f0f0 !important;
+  color: #333 !important;
+}
+
+.gn-note-edit-area {
+  padding: 20px !important;
+}
+
+#gn-note-textarea {
+  width: 100% !important;
+  height: 300px !important;
+  border: 1px solid #ddd !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  resize: vertical !important;
+  outline: none !important;
+  transition: border-color 0.2s ease !important;
+}
+
+#gn-note-textarea:focus {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 3px rgba(102,126,234,0.1) !important;
+}
+
+.gn-note-preview-area {
+  padding: 20px !important;
+  max-height: 300px !important;
+  overflow-y: auto !important;
+}
+
+#gn-note-preview {
+  line-height: 1.6 !important;
+  color: #333 !important;
+}
+
+#gn-note-preview h1, #gn-note-preview h2, #gn-note-preview h3 {
+  margin: 16px 0 8px 0 !important;
+  color: #2c3e50 !important;
+}
+
+#gn-note-preview h1 {
+  font-size: 24px !important;
+  border-bottom: 2px solid #eee !important;
+  padding-bottom: 8px !important;
+}
+
+#gn-note-preview h2 {
+  font-size: 20px !important;
+}
+
+#gn-note-preview h3 {
+  font-size: 18px !important;
+}
+
+#gn-note-preview code {
+  background: #f8f9fa !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
+  font-size: 13px !important;
+  color: #e83e8c !important;
+}
+
+#gn-note-preview ul {
+  padding-left: 20px !important;
+  margin: 8px 0 !important;
+}
+
+#gn-note-preview li {
+  margin: 4px 0 !important;
+}
+
+#gn-note-preview a {
+  color: #667eea !important;
+  text-decoration: none !important;
+}
+
+#gn-note-preview a:hover {
+  text-decoration: underline !important;
+}
+
+.gn-note-footer {
+  padding: 16px 20px !important;
+  background: #f8f9fa !important;
+  border-top: 1px solid #eee !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+}
+
+.gn-note-cancel, .gn-note-save {
+  padding: 10px 20px !important;
+  border: none !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.gn-note-cancel {
+  background: #6c757d !important;
+  color: white !important;
+}
+
+.gn-note-cancel:hover {
+  background: #545b62 !important;
+}
+
+.gn-note-save {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  font-weight: 500 !important;
+}
+
+.gn-note-save:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(102,126,234,0.3) !important;
+}
+
+/* 便利贴弹窗样式 */
+.gn-note-popup-content {
+  background: white !important;
+  border-radius: 8px !important;
+  min-width: 300px !important;
+  max-width: 400px !important;
+  max-height: 300px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
+  animation: gn-popup-fade-in 0.2s ease !important;
+  overflow: hidden !important;
+}
+
+@keyframes gn-popup-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.gn-note-popup-header {
+  background: #ff6b35 !important;
+  color: white !important;
+  padding: 12px 16px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  font-weight: 500 !important;
+}
+
+.gn-note-popup-close {
+  background: none !important;
+  border: none !important;
+  color: white !important;
+  font-size: 18px !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.gn-note-popup-close:hover {
+  background: rgba(255,255,255,0.2) !important;
+}
+
+.gn-note-popup-body {
+  padding: 16px !important;
+  max-height: 240px !important;
+  overflow-y: auto !important;
+  line-height: 1.5 !important;
+  color: #333 !important;
+}
+
+.gn-note-popup-body h1, .gn-note-popup-body h2, .gn-note-popup-body h3 {
+  margin: 12px 0 6px 0 !important;
+  color: #2c3e50 !important;
+}
+
+.gn-note-popup-body code {
+  background: #f8f9fa !important;
+  padding: 2px 4px !important;
+  border-radius: 3px !important;
+  font-size: 13px !important;
+  color: #e83e8c !important;
+}
+
+.gn-note-popup-body ul {
+  padding-left: 18px !important;
+  margin: 6px 0 !important;
+}
+
+.gn-note-popup-body a {
+  color: #ff6b35 !important;
+  text-decoration: none !important;
+}
+
+.gn-note-popup-body a:hover {
+  text-decoration: underline !important;
+}
+
 /* 简化的基础样式类 */
 .gn-base {
   position: relative !important;

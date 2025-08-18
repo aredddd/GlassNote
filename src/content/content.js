@@ -760,8 +760,7 @@ class GlassNoteSystem {
         this.hideToolbar();
         return;
       }
-      // 暂时禁用便利贴功能，专注于基础标注
-      alert('便利贴功能开发中，敬请期待！');
+      this.showNoteEditor();
     });
 
     document.getElementById('red-btn')?.addEventListener('click', () => {
@@ -1155,6 +1154,326 @@ class GlassNoteSystem {
     this.selectedRange = null;
   }
 
+    /**
+   * 显示便利贴编辑器
+   */
+  showNoteEditor() {
+    this.hideToolbar();
+    
+    // 创建编辑器容器
+    const editorContainer = document.createElement('div');
+    editorContainer.id = 'gn-note-editor';
+    editorContainer.innerHTML = `
+      <div class="gn-note-editor-content">
+        <div class="gn-note-header">
+          <h3>📝 添加便利贴</h3>
+          <button class="gn-note-close">×</button>
+        </div>
+        <div class="gn-note-body">
+          <div class="gn-note-tabs">
+            <button class="gn-note-tab active" data-tab="edit">编辑</button>
+            <button class="gn-note-tab" data-tab="preview">预览</button>
+          </div>
+          <div class="gn-note-edit-area">
+            <textarea id="gn-note-textarea" placeholder="支持Markdown语法...
+
+# 标题
+**粗体** *斜体*
+- 列表项
+[链接](url)
+\`代码\`
+
+在此输入你的笔记..."></textarea>
+          </div>
+          <div class="gn-note-preview-area" style="display: none;">
+            <div id="gn-note-preview"></div>
+          </div>
+        </div>
+        <div class="gn-note-footer">
+          <button class="gn-note-cancel">取消</button>
+          <button class="gn-note-save">保存便利贴</button>
+        </div>
+      </div>
+    `;
+    
+    // 应用样式
+    editorContainer.style.cssText = `
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      background: rgba(0,0,0,0.5) !important;
+      z-index: 2147483647 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    `;
+    
+    document.body.appendChild(editorContainer);
+    
+    // 绑定编辑器事件
+    this.bindNoteEditorEvents(editorContainer);
+    
+    // 自动聚焦
+    setTimeout(() => {
+      document.getElementById('gn-note-textarea')?.focus();
+    }, 100);
+  }
+
+  /**
+   * 绑定便利贴编辑器事件
+   */
+  bindNoteEditorEvents(container) {
+    const textarea = container.querySelector('#gn-note-textarea');
+    const preview = container.querySelector('#gn-note-preview');
+    const editTab = container.querySelector('[data-tab="edit"]');
+    const previewTab = container.querySelector('[data-tab="preview"]');
+    const editArea = container.querySelector('.gn-note-edit-area');
+    const previewArea = container.querySelector('.gn-note-preview-area');
+    
+    // 标签切换
+    editTab.addEventListener('click', () => {
+      editTab.classList.add('active');
+      previewTab.classList.remove('active');
+      editArea.style.display = 'block';
+      previewArea.style.display = 'none';
+    });
+    
+    previewTab.addEventListener('click', () => {
+      previewTab.classList.add('active');
+      editTab.classList.remove('active');
+      editArea.style.display = 'none';
+      previewArea.style.display = 'block';
+      
+      // 更新预览
+      this.updateMarkdownPreview(textarea.value, preview);
+    });
+    
+    // 实时预览更新
+    textarea.addEventListener('input', () => {
+      if (previewTab.classList.contains('active')) {
+        this.updateMarkdownPreview(textarea.value, preview);
+      }
+    });
+    
+    // 关闭按钮
+    container.querySelector('.gn-note-close').addEventListener('click', () => {
+      container.remove();
+    });
+    
+    container.querySelector('.gn-note-cancel').addEventListener('click', () => {
+      container.remove();
+    });
+    
+    // 保存按钮
+    container.querySelector('.gn-note-save').addEventListener('click', () => {
+      const content = textarea.value.trim();
+      if (content) {
+        this.createStickyNote(content);
+        container.remove();
+      } else {
+        this.showToast('请输入便利贴内容', 'warning');
+      }
+    });
+    
+    // 点击背景关闭
+    container.addEventListener('click', (e) => {
+      if (e.target === container) {
+        container.remove();
+      }
+    });
+    
+    // ESC键关闭
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.getElementById('gn-note-editor')) {
+        container.remove();
+      }
+    }, { once: true });
+  }
+
+  /**
+   * 简单的Markdown渲染
+   */
+  updateMarkdownPreview(text, previewElement) {
+    // 简单的Markdown解析
+    let html = text
+      // 标题
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+      // 粗体和斜体
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      // 行内代码
+      .replace(/`(.*?)`/g, '<code>$1</code>')
+      // 链接
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+      // 列表
+      .replace(/^\- (.*$)/gim, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+      // 换行
+      .replace(/\n/g, '<br>');
+    
+    previewElement.innerHTML = html || '<em style="color: #999;">预览将在这里显示...</em>';
+  }
+
+  /**
+   * 创建便利贴角标
+   */
+  createStickyNote(content) {
+    if (!this.selectedRange) {
+      this.showToast('请先选择文本位置', 'warning');
+      return;
+    }
+    
+    // 获取选择位置
+    const rect = this.selectedRange.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+    
+    // 创建便利贴ID
+    const noteId = `note-${Date.now()}`;
+    
+    // 创建便利贴角标
+    const noteBadge = document.createElement('div');
+    noteBadge.className = 'gn-note-badge';
+    noteBadge.setAttribute('data-note-id', noteId);
+    noteBadge.innerHTML = '📝';
+    
+    // 定位角标
+    noteBadge.style.cssText = `
+      position: absolute !important;
+      left: ${rect.left + scrollLeft - 10}px !important;
+      top: ${rect.top + scrollTop - 10}px !important;
+      width: 20px !important;
+      height: 20px !important;
+      background: #ff6b35 !important;
+      border-radius: 50% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 12px !important;
+      cursor: pointer !important;
+      z-index: 1000 !important;
+      box-shadow: 0 2px 8px rgba(255,107,53,0.3) !important;
+      transition: transform 0.2s ease !important;
+    `;
+    
+    document.body.appendChild(noteBadge);
+    
+    // 绑定点击事件
+    noteBadge.addEventListener('click', () => {
+      this.showNotePopup(content, noteBadge);
+    });
+    
+    noteBadge.addEventListener('mouseenter', () => {
+      noteBadge.style.transform = 'scale(1.1)';
+    });
+    
+    noteBadge.addEventListener('mouseleave', () => {
+      noteBadge.style.transform = 'scale(1)';
+    });
+    
+    // 保存便利贴数据
+    const noteData = {
+      id: noteId,
+      content: content,
+      position: {
+        x: rect.left + scrollLeft - 10,
+        y: rect.top + scrollTop - 10
+      },
+      timestamp: Date.now(),
+      url: window.location.href,
+      pageTitle: document.title
+    };
+    
+    this.saveNoteData(noteData);
+    this.showToast('便利贴已创建！', 'success');
+    
+    // 清除选择
+    this.selectedRange = null;
+  }
+
+  /**
+   * 显示便利贴弹窗
+   */
+  showNotePopup(content, badge) {
+    // 移除已存在的弹窗
+    const existingPopup = document.getElementById('gn-note-popup');
+    if (existingPopup) {
+      existingPopup.remove();
+    }
+    
+    const popup = document.createElement('div');
+    popup.id = 'gn-note-popup';
+    popup.innerHTML = `
+      <div class="gn-note-popup-content">
+        <div class="gn-note-popup-header">
+          <span>📝 便利贴</span>
+          <button class="gn-note-popup-close">×</button>
+        </div>
+        <div class="gn-note-popup-body">
+          <div id="gn-note-popup-content"></div>
+        </div>
+      </div>
+    `;
+    
+    // 获取角标位置
+    const badgeRect = badge.getBoundingClientRect();
+    
+    popup.style.cssText = `
+      position: fixed !important;
+      left: ${badgeRect.left + 30}px !important;
+      top: ${badgeRect.top - 10}px !important;
+      z-index: 2147483646 !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // 渲染Markdown内容
+    this.updateMarkdownPreview(content, popup.querySelector('#gn-note-popup-content'));
+    
+    // 绑定关闭事件
+    popup.querySelector('.gn-note-popup-close').addEventListener('click', () => {
+      popup.remove();
+    });
+    
+    // 点击外部关闭
+    setTimeout(() => {
+      document.addEventListener('click', (e) => {
+        if (!popup.contains(e.target) && !badge.contains(e.target)) {
+          popup.remove();
+        }
+      }, { once: true });
+    }, 100);
+  }
+
+  /**
+   * 保存便利贴数据
+   */
+  async saveNoteData(noteData) {
+    try {
+      const url = this.currentUrl;
+      const result = await chrome.storage.local.get([url]);
+      const pageData = result[url] || { annotations: [], notes: [] };
+      
+      if (!pageData.notes) {
+        pageData.notes = [];
+      }
+      
+      pageData.notes.push(noteData);
+      
+      await chrome.storage.local.set({ [url]: pageData });
+      console.log('📝 便利贴已保存:', noteData);
+    } catch (error) {
+      console.error('❌ 保存便利贴失败:', error);
+      this.showToast('保存失败', 'error');
+    }
+  }
+
   /**
    * 切换 GlassNote 开关
    */
@@ -1220,7 +1539,7 @@ class GlassNoteSystem {
   }
 
   /**
-   * 加载当前页面的标注
+   * 加载当前页面的标注和便利贴
    */
   async loadAnnotations() {
     try {
@@ -1228,17 +1547,84 @@ class GlassNoteSystem {
       const result = await chrome.storage.local.get([url]);
       const pageData = result[url];
       
-      if (pageData && pageData.annotations) {
-        let successCount = 0;
-        for (const annotationData of pageData.annotations) {
-          if (await this.restoreAnnotation(annotationData)) {
-            successCount++;
+      if (pageData) {
+        // 加载标注
+        if (pageData.annotations) {
+          let successCount = 0;
+          for (const annotationData of pageData.annotations) {
+            if (await this.restoreAnnotation(annotationData)) {
+              successCount++;
+            }
           }
+          console.log(`📝 已加载 ${successCount}/${pageData.annotations.length} 个标注`);
         }
-        console.log(`已加载 ${successCount}/${pageData.annotations.length} 个标注`);
+        
+        // 加载便利贴
+        if (pageData.notes && pageData.notes.length > 0) {
+          let noteSuccessCount = 0;
+          for (const noteData of pageData.notes) {
+            if (this.restoreNote(noteData)) {
+              noteSuccessCount++;
+            }
+          }
+          console.log(`📝 已加载 ${noteSuccessCount}/${pageData.notes.length} 个便利贴`);
+        }
       }
     } catch (error) {
       console.error('加载标注失败:', error);
+    }
+  }
+
+  /**
+   * 恢复便利贴角标
+   */
+  restoreNote(noteData) {
+    try {
+      // 创建便利贴角标
+      const noteBadge = document.createElement('div');
+      noteBadge.className = 'gn-note-badge';
+      noteBadge.setAttribute('data-note-id', noteData.id);
+      noteBadge.innerHTML = '📝';
+      
+      // 定位角标
+      noteBadge.style.cssText = `
+        position: absolute !important;
+        left: ${noteData.position.x}px !important;
+        top: ${noteData.position.y}px !important;
+        width: 20px !important;
+        height: 20px !important;
+        background: #ff6b35 !important;
+        border-radius: 50% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 12px !important;
+        cursor: pointer !important;
+        z-index: 1000 !important;
+        box-shadow: 0 2px 8px rgba(255,107,53,0.3) !important;
+        transition: transform 0.2s ease !important;
+      `;
+      
+      document.body.appendChild(noteBadge);
+      
+      // 绑定点击事件
+      noteBadge.addEventListener('click', () => {
+        this.showNotePopup(noteData.content, noteBadge);
+      });
+      
+      noteBadge.addEventListener('mouseenter', () => {
+        noteBadge.style.transform = 'scale(1.1)';
+      });
+      
+      noteBadge.addEventListener('mouseleave', () => {
+        noteBadge.style.transform = 'scale(1)';
+      });
+      
+      console.log('📝 便利贴已恢复:', noteData.id);
+      return true;
+    } catch (error) {
+      console.error('❌ 恢复便利贴失败:', error, noteData);
+      return false;
     }
   }
 
@@ -1470,7 +1856,7 @@ class GlassNoteSystem {
   }
 
   /**
-   * 清除当前页面的所有标注
+   * 清除当前页面的所有标注和便利贴
    */
   clearCurrentAnnotations() {
     try {
@@ -1484,13 +1870,31 @@ class GlassNoteSystem {
         }
       });
 
+      // 移除所有便利贴角标
+      const noteBadges = document.querySelectorAll('.gn-note-badge');
+      noteBadges.forEach(badge => {
+        badge.remove();
+      });
+
+      // 移除可能存在的便利贴弹窗
+      const notePopups = document.querySelectorAll('#gn-note-popup');
+      notePopups.forEach(popup => {
+        popup.remove();
+      });
+
+      // 移除可能存在的编辑器
+      const noteEditors = document.querySelectorAll('#gn-note-editor');
+      noteEditors.forEach(editor => {
+        editor.remove();
+      });
+
       // 清除内存中的数据
       this.annotations.clear();
       
       // 隐藏工具栏
       this.hideToolbar();
       
-      console.log('已清除当前页面的所有标注');
+      console.log('已清除当前页面的所有标注和便利贴');
     } catch (error) {
       console.error('清除标注失败:', error);
     }

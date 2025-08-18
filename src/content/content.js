@@ -2112,14 +2112,20 @@ class GlassNoteSystem {
         }
       }
 
-      if (!targetElement) {
-        console.log('⚠️ DOM路径完全失效，尝试通过文本查找:', text?.substring(0, 30));
-        // 使用改进的文本查找
-        targetElement = this.findElementByTextImproved(text);
-        if (targetElement) {
-          console.log('✅ 通过改进的文本查找找到目标元素');
-        }
-      }
+                      if (!targetElement) {
+                  console.log('⚠️ DOM路径完全失效，尝试通过文本查找:', text?.substring(0, 30));
+                  // 使用改进的文本查找
+                  targetElement = this.findElementByTextImproved(text);
+                  if (targetElement) {
+                    console.log('✅ 通过改进的文本查找找到目标元素:', {
+                      tagName: targetElement.tagName,
+                      className: targetElement.className || '(无)',
+                      textPreview: targetElement.textContent.substring(0, 100)
+                    });
+                  } else {
+                    console.log('❌ 改进的文本查找也失败了');
+                  }
+                }
 
       if (!targetElement) {
         console.warn('❌ 无法找到标注目标元素:', id, text?.substring(0, 30));
@@ -2201,7 +2207,16 @@ class GlassNoteSystem {
     while (node = walker.nextNode()) {
       if (node.textContent.includes(text) && 
           !node.parentElement.closest('.gn-a')) {
-        return node.parentElement;
+        const element = node.parentElement;
+        // 使用新的内容元素检查
+        if (element && this.isContentElement(element)) {
+          console.log('🎯 findElementByText找到匹配元素:', {
+            tagName: element.tagName,
+            textPreview: element.textContent.substring(0, 100),
+            searchText: text.substring(0, 30)
+          });
+          return element;
+        }
       }
     }
     
@@ -2262,9 +2277,14 @@ class GlassNoteSystem {
       const nodeText = node.textContent.replace(/\s+/g, ' ').trim();
       if (nodeText.includes(text)) {
         const element = node.parentElement;
-        if (element && !this.isElementExcluded({ element })) {
+        if (element && !this.isElementExcluded({ element }) && this.isContentElement(element)) {
           // 检查元素是否包含现有标注
           if (!element.querySelector('.gn-a')) {
+            console.log('🎯 找到匹配的内容元素:', {
+              tagName: element.tagName,
+              textPreview: element.textContent.substring(0, 100),
+              searchText: text.substring(0, 30)
+            });
             return element;
           }
         }
@@ -2282,15 +2302,99 @@ class GlassNoteSystem {
     
     for (const element of allElements) {
       if (this.isElementExcluded({ element })) continue;
+      if (!this.isContentElement(element)) continue; // 过滤非内容元素
       if (element.querySelector('.gn-a')) continue; // 跳过已有标注的元素
       
       const elementText = element.textContent.replace(/\s+/g, ' ').trim();
       if (elementText.includes(text) && elementText.length < text.length * 3) {
+        console.log('🎯 包含关系找到匹配元素:', {
+          tagName: element.tagName,
+          textPreview: elementText.substring(0, 100),
+          searchText: text.substring(0, 30)
+        });
         return element;
       }
     }
     
     return null;
+  }
+
+  /**
+   * 检查元素是否为有效的内容元素（过滤脚本、样式等非内容元素）
+   */
+  isContentElement(element) {
+    if (!element || !element.tagName) return false;
+    
+    // 排除明确的非内容元素
+    const excludedTags = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'META', 'LINK', 'HEAD', 'TITLE'];
+    if (excludedTags.includes(element.tagName)) {
+      console.log('🚫 排除非内容标签:', element.tagName);
+      return false;
+    }
+    
+    // 检查父元素是否为非内容元素
+    if (element.closest('script, style, noscript, head')) {
+      console.log('🚫 排除非内容父元素的子元素');
+      return false;
+    }
+    
+    // 检查元素内容是否为脚本/JSON数据
+    const elementText = element.textContent || '';
+    const scriptPatterns = [
+      /window\./,
+      /Object\.assign/,
+      /JSON\.parse/,
+      /function\s*\(/,
+      /var\s+\w+\s*=/,
+      /const\s+\w+\s*=/,
+      /let\s+\w+\s*=/,
+      /"data":\s*{/,
+      /clientVars/,
+      /\{\s*"[\w\-]+"\s*:/  // JSON对象模式
+    ];
+    
+    for (const pattern of scriptPatterns) {
+      if (pattern.test(elementText)) {
+        console.log('🚫 排除脚本/JSON内容元素:', {
+          pattern: pattern.toString(),
+          textPreview: elementText.substring(0, 100)
+        });
+        return false;
+      }
+    }
+    
+    // 检查元素是否隐藏
+    const computedStyle = window.getComputedStyle(element);
+    if (computedStyle.display === 'none' || 
+        computedStyle.visibility === 'hidden' || 
+        computedStyle.opacity === '0') {
+      console.log('🚫 排除隐藏元素');
+      return false;
+    }
+    
+    // 检查元素尺寸（过滤极小的元素）
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 1 || rect.height <= 1) {
+      console.log('🚫 排除尺寸过小的元素');
+      return false;
+    }
+    
+    // 检查是否为数据容器（通过特定属性识别）
+    if (element.hasAttribute('data-json') || 
+        element.hasAttribute('data-config') ||
+        element.className.includes('data-') ||
+        element.id.includes('data-')) {
+      console.log('🚫 排除数据容器元素');
+      return false;
+    }
+    
+    console.log('✅ 有效内容元素:', {
+      tagName: element.tagName,
+      className: element.className || '(无)',
+      textLength: elementText.length
+    });
+    
+    return true;
   }
 
   /**

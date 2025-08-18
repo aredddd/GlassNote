@@ -609,7 +609,18 @@ class GlassNoteSystem {
   /**
    * 显示标注工具栏
    */
-  showToolbar(x, y) {    
+  showToolbar(x, y) {
+    // 确保工具栏容器存在
+    if (!this.toolbarContainer) {
+      console.log('🔧 工具栏容器不存在，正在创建...');
+      this.createToolbar();
+    }
+    
+    if (!this.toolbarContainer) {
+      console.error('❌ 无法创建工具栏容器！');
+      return;
+    }
+    
     this.toolbarContainer.innerHTML = `
       <div class="glassnote-toolbar-buttons">
         <button id="highlight-btn" title="高亮标记">🖍️</button>
@@ -627,6 +638,13 @@ class GlassNoteSystem {
     this.toolbarContainer.style.left = `${x - 100}px`;
     this.toolbarContainer.style.top = `${y - 60}px`;
     this.toolbarContainer.style.display = 'block';
+    
+    console.log('🎯 工具栏已显示', {
+      position: { x: x - 100, y: y - 60 },
+      isEnabled: this.isEnabled,
+      containerExists: !!this.toolbarContainer,
+      inDOM: document.body.contains(this.toolbarContainer)
+    });
 
     // 绑定按钮事件
     this.bindToolbarEvents();
@@ -636,33 +654,47 @@ class GlassNoteSystem {
    * 绑定工具栏事件
    */
   bindToolbarEvents() {
+    const createAnnotationWithCheck = (type, color) => {
+      if (!this.isEnabled) {
+        this.showEnablePrompt();
+        this.hideToolbar();
+        return;
+      }
+      this.createAnnotation(type, color);
+    };
+
     document.getElementById('highlight-btn')?.addEventListener('click', () => {
-      this.createAnnotation('highlight', '#ffff00');
+      createAnnotationWithCheck('highlight', '#ffff00');
     });
 
     document.getElementById('bold-btn')?.addEventListener('click', () => {
-      this.createAnnotation('bold');
+      createAnnotationWithCheck('bold');
     });
 
     document.getElementById('note-btn')?.addEventListener('click', () => {
+      if (!this.isEnabled) {
+        this.showEnablePrompt();
+        this.hideToolbar();
+        return;
+      }
       // 暂时禁用便利贴功能，专注于基础标注
       alert('便利贴功能开发中，敬请期待！');
     });
 
     document.getElementById('underline-btn')?.addEventListener('click', () => {
-      this.createAnnotation('underline');
+      createAnnotationWithCheck('underline');
     });
 
     document.getElementById('red-btn')?.addEventListener('click', () => {
-      this.createAnnotation('color', '#ff0000');
+      createAnnotationWithCheck('color', '#ff0000');
     });
 
     document.getElementById('blue-btn')?.addEventListener('click', () => {
-      this.createAnnotation('color', '#0066ff');
+      createAnnotationWithCheck('color', '#0066ff');
     });
 
     document.getElementById('green-btn')?.addEventListener('click', () => {
-      this.createAnnotation('color', '#00cc00');
+      createAnnotationWithCheck('color', '#00cc00');
     });
   }
 

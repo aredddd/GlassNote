@@ -112,9 +112,26 @@ class GlassNoteSystem {
       const result = await chrome.storage.local.get([this.currentUrl]);
       const pageData = result[this.currentUrl];
       
-      if (pageData && pageData.annotations && pageData.annotations.length > 0) {
-        console.log(`发现${pageData.annotations.length}个标注，询问是否加载`);
-        this.showLoadConfirmDialog(pageData.annotations.length);
+      if (pageData) {
+        let annotationCount = 0;
+        let noteCount = 0;
+        
+        // 统计标注数量
+        if (pageData.annotations && pageData.annotations.length > 0) {
+          annotationCount = pageData.annotations.length;
+        }
+        
+        // 统计便利贴数量
+        if (pageData.notes && pageData.notes.length > 0) {
+          noteCount = pageData.notes.length;
+        }
+        
+        const totalCount = annotationCount + noteCount;
+        
+        if (totalCount > 0) {
+          console.log(`发现${annotationCount}个标注和${noteCount}个便利贴，询问是否加载`);
+          this.showLoadConfirmDialog(annotationCount, noteCount);
+        }
       }
     } catch (error) {
       if (error.message.includes('Extension context invalidated')) {
@@ -129,7 +146,7 @@ class GlassNoteSystem {
   /**
    * 显示加载确认对话框
    */
-  showLoadConfirmDialog(annotationCount) {
+  showLoadConfirmDialog(annotationCount, noteCount = 0) {
     // 创建简洁的确认对话框
     const dialog = document.createElement('div');
     dialog.id = 'glassnote-load-dialog';
@@ -150,12 +167,25 @@ class GlassNoteSystem {
       animation: slideInFromRight 0.3s ease-out !important;
     `;
     
+    const totalCount = annotationCount + noteCount;
+    let contentText = '';
+    
+    if (annotationCount > 0 && noteCount > 0) {
+      contentText = `此页面有 <strong>${annotationCount}</strong> 个标注和 <strong>${noteCount}</strong> 个便利贴，是否加载显示？`;
+    } else if (annotationCount > 0) {
+      contentText = `此页面有 <strong>${annotationCount}</strong> 个标注，是否加载显示？`;
+    } else if (noteCount > 0) {
+      contentText = `此页面有 <strong>${noteCount}</strong> 个便利贴，是否加载显示？`;
+    } else {
+      contentText = `此页面有保存的数据，是否加载显示？`;
+    }
+    
     dialog.innerHTML = `
       <div style="margin-bottom: 12px !important; font-weight: 600 !important; color: #2c3e50 !important;">
-        🔍 发现标注数据
+        🔍 发现GlassNote数据
       </div>
       <div style="margin-bottom: 16px !important; line-height: 1.4 !important;">
-        此页面有 <strong>${annotationCount}</strong> 个标注，是否加载显示？
+        ${contentText}
       </div>
       <div style="display: flex !important; gap: 8px !important; justify-content: flex-end !important;">
         <button id="glassnote-load-no" style="
@@ -174,7 +204,7 @@ class GlassNoteSystem {
           border-radius: 4px !important;
           cursor: pointer !important;
           font-size: 12px !important;
-        ">加载标注</button>
+        ">加载显示</button>
       </div>
     `;
     
@@ -1773,34 +1803,46 @@ class GlassNoteSystem {
   async loadAnnotations() {
     try {
       const url = this.currentUrl;
+      console.log('🔄 开始加载标注数据，URL:', url);
+      
       const result = await chrome.storage.local.get([url]);
       const pageData = result[url];
       
+      console.log('📦 获取到的页面数据:', pageData);
+      
       if (pageData) {
         // 加载标注
-        if (pageData.annotations) {
+        if (pageData.annotations && pageData.annotations.length > 0) {
+          console.log(`🔄 开始恢复${pageData.annotations.length}个标注`);
           let successCount = 0;
           for (const annotationData of pageData.annotations) {
             if (await this.restoreAnnotation(annotationData)) {
               successCount++;
             }
           }
-          console.log(`📝 已加载 ${successCount}/${pageData.annotations.length} 个标注`);
+          console.log(`📝 已成功加载 ${successCount}/${pageData.annotations.length} 个标注`);
+        } else {
+          console.log('📝 没有找到标注数据');
         }
         
         // 加载便利贴
         if (pageData.notes && pageData.notes.length > 0) {
+          console.log(`🔄 开始恢复${pageData.notes.length}个便利贴`);
           let noteSuccessCount = 0;
           for (const noteData of pageData.notes) {
             if (this.restoreNote(noteData)) {
               noteSuccessCount++;
             }
           }
-          console.log(`📝 已加载 ${noteSuccessCount}/${pageData.notes.length} 个便利贴`);
+          console.log(`📝 已成功加载 ${noteSuccessCount}/${pageData.notes.length} 个便利贴`);
+        } else {
+          console.log('📝 没有找到便利贴数据');
         }
+      } else {
+        console.log('📭 当前页面没有保存的数据');
       }
     } catch (error) {
-      console.error('加载标注失败:', error);
+      console.error('❌ 加载标注失败:', error);
     }
   }
 
@@ -1884,8 +1926,10 @@ class GlassNoteSystem {
     try {
       const { id, type, text, color, domPath } = annotationData;
       
+      console.log('🔄 尝试恢复标注:', { id, type, text: text?.substring(0, 50), domPath });
+      
       if (!domPath) {
-        console.warn('标注缺少DOM路径，跳过:', id);
+        console.warn('❌ 标注缺少DOM路径，跳过:', id);
         return false;
       }
 
@@ -1893,29 +1937,35 @@ class GlassNoteSystem {
       let targetElement;
       try {
         targetElement = document.querySelector(domPath);
+        if (targetElement) {
+          console.log('✅ 通过DOM路径找到目标元素:', domPath);
+        }
       } catch (error) {
-        console.warn('DOM路径无效:', domPath, error);
+        console.warn('❌ DOM路径无效:', domPath, error);
       }
 
       if (!targetElement) {
+        console.log('⚠️ DOM路径失效，尝试通过文本查找:', text?.substring(0, 30));
         // 如果路径找不到，尝试通过文本内容查找
         targetElement = this.findElementByText(text);
+        if (targetElement) {
+          console.log('✅ 通过文本内容找到目标元素');
+        }
       }
 
       if (!targetElement) {
-        console.warn('无法找到标注目标元素:', id, text);
+        console.warn('❌ 无法找到标注目标元素:', id, text?.substring(0, 30));
         return false;
       }
 
-      // 创建标注包装元素
+      // 创建标注包装元素（使用新的简化格式）
       const annotationSpan = document.createElement('span');
-      annotationSpan.className = 'gn-a';
-      annotationSpan.setAttribute('data-glassnote-id', id);
-      annotationSpan.setAttribute('data-glassnote-type', type);
-      annotationSpan.setAttribute('data-glassnote-text', text);
+      annotationSpan.className = 'gn-a gn-base';
+      annotationSpan.setAttribute('data-gn-id', id.split('-')[1] || id); // 只保留数字部分
+      annotationSpan.setAttribute('data-gn-t', type.charAt(0)); // 只保留类型首字母
       
       if (color) {
-        annotationSpan.setAttribute('data-glassnote-color', color);
+        annotationSpan.setAttribute('data-gn-c', color);
       }
 
       // 应用样式
@@ -1923,12 +1973,24 @@ class GlassNoteSystem {
 
       // 包装目标内容
       const textContent = targetElement.textContent;
+      console.log('🔍 检查文本包含:', { 
+        targetText: textContent.substring(0, 100),
+        searchText: text?.substring(0, 50),
+        includes: textContent.includes(text)
+      });
+      
       if (textContent.includes(text)) {
         const startIndex = textContent.indexOf(text);
         const endIndex = startIndex + text.length;
         
         const beforeText = textContent.substring(0, startIndex);
         const afterText = textContent.substring(endIndex);
+        
+        console.log('📝 创建标注包装:', {
+          beforeText: beforeText?.substring(0, 20),
+          targetText: text?.substring(0, 30),
+          afterText: afterText?.substring(0, 20)
+        });
         
         // 重构DOM结构
         targetElement.innerHTML = '';
@@ -1944,10 +2006,12 @@ class GlassNoteSystem {
         }
         
         this.annotations.set(id, annotationData);
+        console.log('✅ 标注恢复成功:', id);
         return true;
+      } else {
+        console.warn('❌ 目标元素不包含指定文本');
+        return false;
       }
-      
-      return false;
     } catch (error) {
       console.error('恢复标注失败:', error);
       return false;

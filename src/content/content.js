@@ -221,10 +221,10 @@ class GlassNoteSystem {
     this.toolbarContainer.style.cssText = `
       position: fixed !important;
       background: white !important;
-      border: 1px solid #ccc !important;
+      border: 2px solid #4a90e2 !important;
       border-radius: 8px !important;
       padding: 8px !important;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
       display: none !important;
       z-index: 2147483647 !important;
       pointer-events: auto !important;
@@ -232,6 +232,19 @@ class GlassNoteSystem {
       font-size: 14px !important;
       line-height: 1.4 !important;
       color: #333 !important;
+      min-width: 200px !important;
+      min-height: 40px !important;
+      opacity: 1 !important;
+      visibility: visible !important;
+      transform: none !important;
+      clip: none !important;
+      overflow: visible !important;
+      width: auto !important;
+      height: auto !important;
+      max-width: none !important;
+      max-height: none !important;
+      margin: 0 !important;
+      isolation: isolate !important;
     `;
     document.body.appendChild(this.toolbarContainer);
   }
@@ -269,14 +282,36 @@ class GlassNoteSystem {
         this.showToast(`强制模式已${status} (跳过所有检查)`, this.forceMode ? 'warning' : 'info');
       }
       
-      // 切换调试模式快捷键 Ctrl+Shift+B  
-      if (e.ctrlKey && e.shiftKey && e.key === 'B') {
-        e.preventDefault();
-        this.debugMode = !this.debugMode;
-        const status = this.debugMode ? '启用' : '禁用';
-        console.log(`🔍 调试模式已${status}`);
-        this.showToast(`调试模式已${status} (控制台日志)`, this.debugMode ? 'info' : 'success');
-      }
+              // 切换调试模式快捷键 Ctrl+Shift+B
+        if (e.ctrlKey && e.shiftKey && e.key === 'B') {
+          e.preventDefault();
+          this.debugMode = !this.debugMode;
+          const status = this.debugMode ? '启用' : '禁用';
+          console.log(`🔍 调试模式已${status}`);
+          this.showToast(`调试模式已${status} (控制台日志)`, this.debugMode ? 'info' : 'success');
+        }
+        
+        // 测试工具栏显示快捷键 Ctrl+Shift+T
+        if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+          e.preventDefault();
+          console.log('🧪 测试工具栏显示');
+          
+          // 在屏幕中央强制显示工具栏
+          const centerX = window.innerWidth / 2;
+          const centerY = window.innerHeight / 2;
+          
+          if (!this.toolbarContainer) {
+            this.createToolbar();
+          }
+          
+          this.showToolbar(centerX, centerY);
+          this.showToast('测试工具栏已显示在屏幕中央', 'warning');
+          
+          // 3秒后自动隐藏
+          setTimeout(() => {
+            this.hideToolbar();
+          }, 3000);
+        }
     });
 
     // 点击空白处隐藏工具栏（只有启用时才需要）
@@ -634,16 +669,42 @@ class GlassNoteSystem {
       </div>
     `;
 
-    // 定位工具栏
-    this.toolbarContainer.style.left = `${x - 100}px`;
-    this.toolbarContainer.style.top = `${y - 60}px`;
+    // 定位工具栏 - 确保在可见区域内
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const toolbarWidth = 220;
+    const toolbarHeight = 50;
+    
+    let left = Math.max(10, Math.min(x - 100, viewportWidth - toolbarWidth - 10));
+    let top = Math.max(10, Math.min(y - 60, viewportHeight - toolbarHeight - 10));
+    
+    this.toolbarContainer.style.left = `${left}px`;
+    this.toolbarContainer.style.top = `${top}px`;
     this.toolbarContainer.style.display = 'block';
     
+    // 强制重绘
+    this.toolbarContainer.offsetHeight;
+    
+    // 详细调试信息
+    const computedStyle = window.getComputedStyle(this.toolbarContainer);
     console.log('🎯 工具栏已显示', {
-      position: { x: x - 100, y: y - 60 },
+      originalPosition: { x: x - 100, y: y - 60 },
+      adjustedPosition: { left, top },
+      viewport: { width: viewportWidth, height: viewportHeight },
       isEnabled: this.isEnabled,
       containerExists: !!this.toolbarContainer,
-      inDOM: document.body.contains(this.toolbarContainer)
+      inDOM: document.body.contains(this.toolbarContainer),
+      computedStyles: {
+        display: computedStyle.display,
+        position: computedStyle.position,
+        zIndex: computedStyle.zIndex,
+        visibility: computedStyle.visibility,
+        opacity: computedStyle.opacity,
+        transform: computedStyle.transform,
+        left: computedStyle.left,
+        top: computedStyle.top
+      },
+      boundingRect: this.toolbarContainer.getBoundingClientRect()
     });
 
     // 绑定按钮事件
@@ -1477,3 +1538,4 @@ console.log('💡 使用提示：选择文本查看标注选项，或按 Ctrl+Sh
 console.log('🔧 调试快捷键：');
 console.log('   Ctrl+Shift+B - 切换调试模式 (控制台详细日志)');
 console.log('   Ctrl+Shift+D - 强制模式 (跳过所有选择检查)');
+console.log('   Ctrl+Shift+T - 测试工具栏显示 (屏幕中央3秒)');

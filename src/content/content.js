@@ -307,28 +307,11 @@ class GlassNoteSystem {
       return;
     }
 
-    // 检查选择是否在可编辑元素内（避免干扰输入框等）
     const range = selection.getRangeAt(0);
-    const container = range.commonAncestorContainer;
-    const isInEditableElement = container.nodeType === Node.TEXT_NODE ? 
-      container.parentElement?.isContentEditable || 
-      container.parentElement?.closest('input, textarea, [contenteditable="true"]') :
-      container.isContentEditable || 
-      container.closest?.('input, textarea, [contenteditable="true"]');
     
-    if (isInEditableElement) {
-      console.log('⚠️ 在可编辑元素内，跳过');
-      this.hideToolbar();
-      return;
-    }
-
-    // 检查是否已经在标注元素内（避免重复标注）
-    const isInAnnotation = container.nodeType === Node.TEXT_NODE ?
-      container.parentElement?.closest('.glassnote-annotation') :
-      container.closest?.('.glassnote-annotation');
-    
-    if (isInAnnotation) {
-      console.log('⚠️ 在标注元素内，跳过');
+    // 改进的上下文检查：使用更智能的元素检测
+    if (this.shouldSkipSelection(range)) {
+      console.log('⚠️ 跳过此次选择');
       this.hideToolbar();
       return;
     }
@@ -346,6 +329,96 @@ class GlassNoteSystem {
     console.log('✅ 显示标注工具栏');
     // 显示标注工具栏
     this.showToolbar(e.pageX, e.pageY);
+  }
+
+  /**
+   * 智能判断是否应该跳过此次选择
+   */
+  shouldSkipSelection(range) {
+    const startContainer = range.startContainer;
+    const endContainer = range.endContainer;
+    
+    // 获取选择的所有相关元素
+    const elementsToCheck = new Set();
+    
+    // 添加开始和结束容器的父元素
+    this.addElementAndParents(startContainer, elementsToCheck);
+    this.addElementAndParents(endContainer, elementsToCheck);
+    
+    // 添加公共祖先容器
+    this.addElementAndParents(range.commonAncestorContainer, elementsToCheck);
+
+    // 检查这些元素是否在排除列表中
+    for (const element of elementsToCheck) {
+      if (this.isElementExcluded(element)) {
+        console.log('⚠️ 发现排除元素:', element.tagName || element.nodeType, element.className || '');
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * 添加元素及其父元素到检查集合
+   */
+  addElementAndParents(node, elementSet) {
+    let current = node;
+    
+    // 如果是文本节点，从其父元素开始
+    if (current.nodeType === Node.TEXT_NODE) {
+      current = current.parentElement;
+    }
+    
+    // 向上遍历到document，但最多检查10层（避免过度遍历）
+    let depth = 0;
+    while (current && current !== document && current !== document.body && depth < 10) {
+      if (current.nodeType === Node.ELEMENT_NODE) {
+        elementSet.add(current);
+      }
+      current = current.parentElement;
+      depth++;
+    }
+  }
+
+  /**
+   * 检查元素是否应该被排除
+   */
+  isElementExcluded(element) {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+      return false;
+    }
+
+    // 检查可编辑元素
+    if (element.isContentEditable || 
+        element.contentEditable === 'true' ||
+        element.matches?.('input, textarea, [contenteditable="true"], [contenteditable=""], .ql-editor')) {
+      return true;
+    }
+
+    // 检查已有标注
+    if (element.matches?.('.glassnote-annotation') ||
+        element.closest?.('.glassnote-annotation')) {
+      return true;
+    }
+
+    // 检查特殊元素（代码块、脚本等）
+    if (element.matches?.('script, style, code, pre, .highlight, .hljs')) {
+      return true;
+    }
+
+    // 检查隐藏或不可见元素
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden') {
+      return true;
+    }
+
+    // 检查特殊的富文本编辑器
+    if (element.matches?.('[class*="editor"], [class*="wysiwyg"], [role="textbox"]')) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -465,7 +538,7 @@ class GlassNoteSystem {
   }
 
   /**
-   * 创建DOM内联标注
+   * 创建DOM内联标注 - 支持多行和复杂DOM结构
    */
   createAnnotation(type, color = null) {
     if (!this.selectedRange) return;
@@ -474,57 +547,204 @@ class GlassNoteSystem {
       const annotationId = `glassnote-${++this.annotationCounter}-${Date.now()}`;
       const selectedText = this.selectedText;
       
-      // 创建标注包装元素
-      const annotationSpan = document.createElement('span');
-      annotationSpan.className = 'glassnote-annotation';
-      annotationSpan.setAttribute('data-glassnote-id', annotationId);
-      annotationSpan.setAttribute('data-glassnote-type', type);
-      annotationSpan.setAttribute('data-glassnote-text', selectedText);
-      
-      if (color) {
-        annotationSpan.setAttribute('data-glassnote-color', color);
+      console.log('🎨 开始创建标注:', { type, color, text: selectedText.substring(0, 50) + '...' });
+
+      // 检查是否是简单的单行选择
+      if (this.isSimpleSelection(this.selectedRange)) {
+        // 简单选择，使用快速方法
+        this.createSimpleAnnotation(annotationId, type, color, selectedText);
+      } else {
+        // 复杂选择（多行、跨元素），使用更稳健的方法
+        this.createComplexAnnotation(annotationId, type, color, selectedText);
       }
 
-      // 应用CSS样式类
-      annotationSpan.classList.add(`glassnote-${type}`);
-      
-      // 设置内联样式
-      this.applyAnnotationStyle(annotationSpan, type, color);
-
-      // 用标注元素包装选中的内容
-      try {
-        this.selectedRange.surroundContents(annotationSpan);
-      } catch (error) {
-        // 如果不能直接包装（跨越多个元素），则提取内容并包装
-        const contents = this.selectedRange.extractContents();
-        annotationSpan.appendChild(contents);
-        this.selectedRange.insertNode(annotationSpan);
-      }
-
-      // 生成DOM路径用于后续定位
-      const domPath = this.generateDOMPath(annotationSpan);
-      
-      // 存储标注数据
-      const annotationData = {
-        id: annotationId,
-        type: type,
-        text: selectedText,
-        color: color,
-        domPath: domPath,
-        createdAt: new Date().toISOString()
-      };
-
-      this.annotations.set(annotationId, annotationData);
-      this.saveAnnotation(annotationData);
-
-      console.log('创建内联标注:', annotationData);
+      console.log('✅ 标注创建完成');
       
     } catch (error) {
-      console.error('创建标注失败:', error);
+      console.error('❌ 创建标注失败:', error);
+      // 显示用户友好的错误提示
+      this.showToast('标注创建失败，请重试', 'error');
     }
 
     this.hideToolbar();
     window.getSelection().removeAllRanges();
+  }
+
+  /**
+   * 检查是否是简单的选择（单一文本节点内）
+   */
+  isSimpleSelection(range) {
+    const startContainer = range.startContainer;
+    const endContainer = range.endContainer;
+    
+    // 检查是否在同一个文本节点内
+    if (startContainer === endContainer && startContainer.nodeType === Node.TEXT_NODE) {
+      return true;
+    }
+
+    // 检查是否在同一个元素内的连续文本节点
+    if (startContainer.nodeType === Node.TEXT_NODE && 
+        endContainer.nodeType === Node.TEXT_NODE &&
+        startContainer.parentElement === endContainer.parentElement) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * 创建简单标注（单行、单元素内）
+   */
+  createSimpleAnnotation(annotationId, type, color, selectedText) {
+    const annotationSpan = this.createAnnotationElement(annotationId, type, color, selectedText);
+
+    try {
+      // 简单情况直接包装
+      this.selectedRange.surroundContents(annotationSpan);
+      console.log('🎯 使用简单包装方法');
+    } catch (error) {
+      // 退化到复杂方法
+      console.log('⚠️ 简单包装失败，使用复杂方法');
+      this.createComplexAnnotation(annotationId, type, color, selectedText);
+      return;
+    }
+
+    this.finalizeAnnotation(annotationId, type, color, selectedText, annotationSpan);
+  }
+
+  /**
+   * 创建复杂标注（多行、跨元素）
+   */
+  createComplexAnnotation(annotationId, type, color, selectedText) {
+    console.log('🔧 使用复杂标注方法');
+
+    // 获取所有涉及的文本节点
+    const textNodes = this.getTextNodesInRange(this.selectedRange);
+    
+    if (textNodes.length === 0) {
+      console.warn('⚠️ 未找到文本节点');
+      return;
+    }
+
+    console.log('📍 找到文本节点数量:', textNodes.length);
+
+    // 为每个文本节点片段创建标注
+    const annotationElements = [];
+    textNodes.forEach((nodeInfo, index) => {
+      const spanId = `${annotationId}-part-${index}`;
+      const span = this.createAnnotationElement(spanId, type, color, nodeInfo.text);
+      
+      // 创建范围并替换文本节点内容
+      const nodeRange = document.createRange();
+      nodeRange.setStart(nodeInfo.node, nodeInfo.startOffset);
+      nodeRange.setEnd(nodeInfo.node, nodeInfo.endOffset);
+      
+      try {
+        nodeRange.deleteContents();
+        nodeRange.insertNode(span);
+        annotationElements.push(span);
+        console.log(`✅ 创建标注片段 ${index + 1}/${textNodes.length}`);
+      } catch (error) {
+        console.error(`❌ 创建标注片段失败 ${index + 1}:`, error);
+      }
+    });
+
+    if (annotationElements.length > 0) {
+      // 使用第一个元素作为主要元素来生成DOM路径
+      this.finalizeAnnotation(annotationId, type, color, selectedText, annotationElements[0]);
+    }
+  }
+
+  /**
+   * 获取范围内的所有文本节点及其偏移
+   */
+  getTextNodesInRange(range) {
+    const textNodes = [];
+    const treeWalker = document.createTreeWalker(
+      range.commonAncestorContainer,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: function(node) {
+          if (range.intersectsNode(node)) {
+            return NodeFilter.FILTER_ACCEPT;
+          }
+          return NodeFilter.FILTER_REJECT;
+        }
+      }
+    );
+
+    let node;
+    while (node = treeWalker.nextNode()) {
+      // 计算这个节点在选择范围内的部分
+      const nodeRange = document.createRange();
+      nodeRange.selectNodeContents(node);
+      
+      // 找到交集
+      const intersection = range.cloneRange();
+      if (intersection.compareBoundaryPoints(Range.START_TO_START, nodeRange) < 0) {
+        intersection.setStart(node, 0);
+      }
+      if (intersection.compareBoundaryPoints(Range.END_TO_END, nodeRange) > 0) {
+        intersection.setEnd(node, node.textContent.length);
+      }
+
+      if (!intersection.collapsed) {
+        const startOffset = intersection.startContainer === node ? intersection.startOffset : 0;
+        const endOffset = intersection.endContainer === node ? intersection.endOffset : node.textContent.length;
+        
+        textNodes.push({
+          node: node,
+          startOffset: startOffset,
+          endOffset: endOffset,
+          text: node.textContent.substring(startOffset, endOffset)
+        });
+      }
+    }
+
+    return textNodes;
+  }
+
+  /**
+   * 创建标注元素
+   */
+  createAnnotationElement(annotationId, type, color, text) {
+    const annotationSpan = document.createElement('span');
+    annotationSpan.className = 'glassnote-annotation';
+    annotationSpan.setAttribute('data-glassnote-id', annotationId);
+    annotationSpan.setAttribute('data-glassnote-type', type);
+    annotationSpan.setAttribute('data-glassnote-text', text);
+    
+    if (color) {
+      annotationSpan.setAttribute('data-glassnote-color', color);
+    }
+
+    // 应用CSS样式类
+    this.applyAnnotationStyle(annotationSpan, type, color);
+    
+    return annotationSpan;
+  }
+
+  /**
+   * 完成标注创建（保存数据）
+   */
+  finalizeAnnotation(annotationId, type, color, selectedText, mainElement) {
+    // 生成DOM路径用于后续定位
+    const domPath = this.generateDOMPath(mainElement);
+    
+    // 存储标注数据
+    const annotationData = {
+      id: annotationId,
+      type: type,
+      text: selectedText,
+      color: color,
+      domPath: domPath,
+      createdAt: new Date().toISOString()
+    };
+
+    this.annotations.set(annotationId, annotationData);
+    this.saveAnnotation(annotationData);
+
+    console.log('💾 标注数据已保存:', annotationData);
   }
 
   /**
@@ -867,6 +1087,72 @@ class GlassNoteSystem {
         message.remove();
       }
     }, 10000);
+  }
+
+  /**
+   * 显示Toast提示消息
+   */
+  showToast(message, type = 'info', duration = 3000) {
+    // 移除现有Toast
+    const existingToast = document.getElementById('glassnote-toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    const toast = document.createElement('div');
+    toast.id = 'glassnote-toast';
+    
+    // 根据类型设置颜色
+    let backgroundColor, textColor;
+    switch (type) {
+      case 'error':
+        backgroundColor = '#ff4757';
+        textColor = 'white';
+        break;
+      case 'success':
+        backgroundColor = '#2ed573';
+        textColor = 'white';
+        break;
+      case 'warning':
+        backgroundColor = '#ffa502';
+        textColor = 'white';
+        break;
+      default:
+        backgroundColor = '#5352ed';
+        textColor = 'white';
+    }
+    
+    toast.style.cssText = `
+      position: fixed !important;
+      top: 20px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      background: ${backgroundColor} !important;
+      color: ${textColor} !important;
+      padding: 12px 20px !important;
+      border-radius: 8px !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      font-size: 14px !important;
+      z-index: 2147483647 !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+      opacity: 0 !important;
+      animation: glassnote-toast-in 0.3s ease forwards !important;
+    `;
+    
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    // 自动消失
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.style.animation = 'glassnote-toast-out 0.3s ease forwards';
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.remove();
+          }
+        }, 300);
+      }
+    }, duration);
   }
 
   /**

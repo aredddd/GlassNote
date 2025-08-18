@@ -220,6 +220,29 @@
   }
 }
 
+/* Toast消息动画 */
+@keyframes glassnote-toast-in {
+  from {
+    opacity: 0 !important;
+    transform: translateX(-50%) translateY(-20px) !important;
+  }
+  to {
+    opacity: 1 !important;
+    transform: translateX(-50%) translateY(0) !important;
+  }
+}
+
+@keyframes glassnote-toast-out {
+  from {
+    opacity: 1 !important;
+    transform: translateX(-50%) translateY(0) !important;
+  }
+  to {
+    opacity: 0 !important;
+    transform: translateX(-50%) translateY(-20px) !important;
+  }
+}
+
 /* 确保标注元素不影响原始布局 */
 .glassnote-annotation,
 .glassnote-annotation * {
@@ -239,11 +262,7 @@
   -ms-user-select: text !important;
 }
 
-/* 确保跨行标注正确显示 */
-.glassnote-base {
-  box-decoration-break: clone !important;
-  -webkit-box-decoration-break: clone !important;
-}
+/* 确保跨行标注正确显示（合并到基础样式中） */
 
 /* 防止标注影响链接和其他交互元素 */
 .glassnote-annotation a,

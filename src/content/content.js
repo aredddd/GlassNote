@@ -19,11 +19,31 @@ class GlassNoteSystem {
    * 初始化系统
    */
   async init() {
-    // 不自动启动，等待路由变化或用户主动启用
-    this.setupRouteDetection();
-    this.setupEventListeners();
-    await this.checkCurrentPage();
-    console.log('GlassNote 系统已初始化，等待路由变化检测');
+    try {
+      console.log('🚀 GlassNote v2.0 正在初始化...');
+      
+      // 检查扩展上下文
+      if (!this.checkExtensionContext()) {
+        console.error('❌ 扩展上下文无效，初始化失败');
+        this.showContextInvalidatedMessage();
+        return;
+      }
+
+      // 不自动启动，等待路由变化或用户主动启用
+      this.setupRouteDetection();
+      this.setupEventListeners();
+      await this.checkCurrentPage();
+      
+      console.log('✅ GlassNote 系统已初始化，等待路由变化检测');
+      console.log('📍 当前URL:', this.currentUrl);
+      console.log('🎛️ 系统状态:', { 
+        isEnabled: this.isEnabled, 
+        hasEventListeners: true,
+        extensionContext: this.checkExtensionContext()
+      });
+    } catch (error) {
+      console.error('❌ GlassNote 初始化失败:', error);
+    }
   }
 
   /**
@@ -79,6 +99,12 @@ class GlassNoteSystem {
    */
   async checkCurrentPage() {
     try {
+      // 检查扩展上下文
+      if (!this.checkExtensionContext()) {
+        console.warn('扩展上下文无效，跳过页面数据检查');
+        return;
+      }
+
       const result = await chrome.storage.local.get([this.currentUrl]);
       const pageData = result[this.currentUrl];
       
@@ -87,7 +113,12 @@ class GlassNoteSystem {
         this.showLoadConfirmDialog(pageData.annotations.length);
       }
     } catch (error) {
-      console.error('检查页面数据失败:', error);
+      if (error.message.includes('Extension context invalidated')) {
+        console.warn('扩展上下文失效，无法检查页面数据');
+        this.showContextInvalidatedMessage();
+      } else {
+        console.error('检查页面数据失败:', error);
+      }
     }
   }
 
@@ -205,11 +236,14 @@ class GlassNoteSystem {
    * 设置事件监听器
    */
   setupEventListeners() {
+    console.log('📝 设置事件监听器...');
+    
     // 防抖处理文本选择，避免频繁触发
     let selectionTimeout;
     document.addEventListener('mouseup', (e) => {
-      if (!this.isEnabled) return; // 只有启用时才处理
+      console.log('🖱️ 检测到鼠标释放事件，isEnabled:', this.isEnabled);
       
+      // 注意：这里移除了isEnabled检查，因为我们需要在路由检测时也能响应
       clearTimeout(selectionTimeout);
       selectionTimeout = setTimeout(() => this.handleTextSelection(e), 50);
     });
@@ -217,6 +251,7 @@ class GlassNoteSystem {
     // 监听键盘快捷键
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'G') {
+        console.log('⌨️ 检测到快捷键 Ctrl+Shift+G');
         e.preventDefault();
         this.toggleGlassNote();
       }
@@ -239,12 +274,23 @@ class GlassNoteSystem {
         this.hideToolbar();
       }
     }, { passive: true });
+    
+    console.log('✅ 事件监听器设置完成');
   }
 
   /**
    * 处理文本选择
    */
   handleTextSelection(e) {
+    console.log('🎯 处理文本选择事件');
+    
+    // 检查扩展上下文
+    if (!this.checkExtensionContext()) {
+      console.warn('扩展上下文失效，无法处理文本选择');
+      this.showContextInvalidatedMessage();
+      return;
+    }
+
     const selection = window.getSelection();
     
     // 更严格的选择检查
@@ -254,6 +300,8 @@ class GlassNoteSystem {
     }
 
     this.selectedText = selection.toString().trim();
+    console.log('📝 选中文本:', this.selectedText);
+    
     if (this.selectedText.length < 1) {
       this.hideToolbar();
       return;
@@ -269,6 +317,7 @@ class GlassNoteSystem {
       container.closest?.('input, textarea, [contenteditable="true"]');
     
     if (isInEditableElement) {
+      console.log('⚠️ 在可编辑元素内，跳过');
       this.hideToolbar();
       return;
     }
@@ -279,15 +328,80 @@ class GlassNoteSystem {
       container.closest?.('.glassnote-annotation');
     
     if (isInAnnotation) {
+      console.log('⚠️ 在标注元素内，跳过');
       this.hideToolbar();
+      return;
+    }
+
+    // 检查系统是否启用
+    if (!this.isEnabled) {
+      console.log('💡 系统未启用，显示启用提示');
+      this.showEnablePrompt(e.pageX, e.pageY);
       return;
     }
 
     // 保存选择范围
     this.selectedRange = range.cloneRange();
     
+    console.log('✅ 显示标注工具栏');
     // 显示标注工具栏
     this.showToolbar(e.pageX, e.pageY);
+  }
+
+  /**
+   * 显示启用提示
+   */
+  showEnablePrompt(x, y) {
+    // 移除现有提示
+    const existingPrompt = document.getElementById('glassnote-enable-prompt');
+    if (existingPrompt) {
+      existingPrompt.remove();
+    }
+
+    const prompt = document.createElement('div');
+    prompt.id = 'glassnote-enable-prompt';
+    prompt.style.cssText = `
+      position: fixed !important;
+      left: ${x - 100}px !important;
+      top: ${y - 60}px !important;
+      background: #4a90e2 !important;
+      color: white !important;
+      padding: 8px 12px !important;
+      border-radius: 6px !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      font-size: 13px !important;
+      z-index: 2147483647 !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+      cursor: pointer !important;
+      transition: all 0.2s ease !important;
+    `;
+    
+    prompt.innerHTML = `
+      <div>💡 点击启用GlassNote标注</div>
+      <div style="font-size: 11px; opacity: 0.8; margin-top: 2px;">或按 Ctrl+Shift+G</div>
+    `;
+    
+    prompt.addEventListener('click', () => {
+      this.enableGlassNote();
+      prompt.remove();
+    });
+    
+    prompt.addEventListener('mouseenter', () => {
+      prompt.style.background = '#357abd';
+    });
+    
+    prompt.addEventListener('mouseleave', () => {
+      prompt.style.background = '#4a90e2';
+    });
+    
+    document.body.appendChild(prompt);
+    
+    // 3秒后自动隐藏
+    setTimeout(() => {
+      if (prompt.parentNode) {
+        prompt.remove();
+      }
+    }, 3000);
   }
 
   /**
@@ -554,6 +668,12 @@ class GlassNoteSystem {
    */
   async saveAnnotation(annotationData) {
     try {
+      // 检查扩展上下文是否有效
+      if (!chrome?.storage?.local) {
+        console.warn('扩展上下文失效，标注仅在内存中保存');
+        return;
+      }
+
       const url = this.currentUrl;
       const result = await chrome.storage.local.get([url]);
       const pageData = result[url] || { 
@@ -568,7 +688,12 @@ class GlassNoteSystem {
       await chrome.storage.local.set({ [url]: pageData });
       console.log('标注已保存:', annotationData);
     } catch (error) {
-      console.error('保存标注失败:', error);
+      if (error.message.includes('Extension context invalidated')) {
+        console.warn('扩展上下文失效，请刷新页面重新加载扩展');
+        this.showContextInvalidatedMessage();
+      } else {
+        console.error('保存标注失败:', error);
+      }
     }
   }
 
@@ -696,6 +821,68 @@ class GlassNoteSystem {
   }
 
   /**
+   * 显示上下文失效消息
+   */
+  showContextInvalidatedMessage() {
+    // 移除可能存在的旧消息
+    const existingMessage = document.getElementById('glassnote-context-invalid');
+    if (existingMessage) {
+      existingMessage.remove();
+    }
+
+    const message = document.createElement('div');
+    message.id = 'glassnote-context-invalid';
+    message.style.cssText = `
+      position: fixed !important;
+      top: 50px !important;
+      right: 20px !important;
+      background: #ff4444 !important;
+      color: white !important;
+      padding: 12px 16px !important;
+      border-radius: 8px !important;
+      box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3) !important;
+      z-index: 2147483647 !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      font-size: 14px !important;
+      max-width: 300px !important;
+      animation: slideInFromRight 0.3s ease-out !important;
+    `;
+    
+    message.innerHTML = `
+      <div style="font-weight: 600; margin-bottom: 8px;">⚠️ 扩展需要重新加载</div>
+      <div style="font-size: 12px; line-height: 1.4;">
+        扩展上下文已失效，请刷新页面以恢复标注功能
+      </div>
+      <button onclick="this.parentElement.remove()" style="
+        margin-top: 8px;
+        padding: 4px 8px;
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 4px;
+        color: white;
+        cursor: pointer;
+        font-size: 11px;
+      ">知道了</button>
+    `;
+    
+    document.body.appendChild(message);
+    
+    // 10秒后自动移除
+    setTimeout(() => {
+      if (message.parentNode) {
+        message.remove();
+      }
+    }, 10000);
+  }
+
+  /**
+   * 检查扩展上下文是否有效
+   */
+  checkExtensionContext() {
+    return !!(chrome?.runtime?.id && chrome?.storage?.local);
+  }
+
+  /**
    * 清除当前页面的所有标注
    */
   clearCurrentAnnotations() {
@@ -726,9 +913,28 @@ class GlassNoteSystem {
 // 初始化 GlassNote
 const glassNote = new GlassNoteSystem();
 
-// 监听来自扩展的消息
-chrome.runtime.onMessage?.addListener((request, sender, sendResponse) => {
+// 检查是否存在旧的实例并清理
+if (window.glassNoteInstance) {
+  console.log('🔄 检测到旧实例，正在清理...');
   try {
+    window.glassNoteInstance.clearCurrentAnnotations();
+  } catch (error) {
+    console.warn('清理旧实例时出错:', error);
+  }
+}
+
+// 监听来自扩展的消息
+chrome.runtime?.onMessage?.addListener((request, sender, sendResponse) => {
+  try {
+    console.log('📨 收到扩展消息:', request);
+    
+    // 检查扩展上下文
+    if (!glassNote.checkExtensionContext()) {
+      console.warn('扩展上下文失效，无法处理消息');
+      sendResponse({ success: false, error: 'Extension context invalidated' });
+      return true;
+    }
+
     switch (request.action) {
       case 'toggle':
         glassNote.toggleGlassNote();
@@ -754,3 +960,26 @@ chrome.runtime.onMessage?.addListener((request, sender, sendResponse) => {
   // 返回true表示异步响应
   return true;
 });
+
+// 保存实例到全局，用于检测重复加载
+window.glassNoteInstance = glassNote;
+
+// 监听页面卸载，清理资源
+window.addEventListener('beforeunload', () => {
+  console.log('🧹 页面卸载，清理GlassNote资源');
+  try {
+    glassNote.clearCurrentAnnotations();
+  } catch (error) {
+    console.warn('清理资源时出错:', error);
+  }
+});
+
+// 定期检查扩展上下文健康状态
+setInterval(() => {
+  if (!glassNote.checkExtensionContext()) {
+    console.warn('⚠️ 扩展上下文失效，系统功能受限');
+  }
+}, 30000); // 每30秒检查一次
+
+console.log('🎉 GlassNote v2.0 加载完成！');
+console.log('💡 使用提示：选择文本查看标注选项，或按 Ctrl+Shift+G 切换显示');

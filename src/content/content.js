@@ -1267,7 +1267,7 @@ class GlassNoteSystem {
     // 生成多维度锚点信息
     const anchorData = this.generatePreciseAnchor(mainElement, selectedText, sourceInfo);
     
-    // 存储标注数据 - 包含丰富的定位信息
+    // 存储标注数据 - 包含完整的精确锚点信息
     const annotationData = {
       id: annotationId,
       type: type,
@@ -1277,6 +1277,12 @@ class GlassNoteSystem {
       // 主要定位信息
       domPath: anchorData.domPath,
       textOffset: anchorData.textOffset,
+      
+      // 🆕 HTML层级结构锚点（最高精度）
+      hierarchy: anchorData.hierarchy,
+      
+      // 🆕 内容区域信息（防止错误匹配）
+      contentZone: anchorData.contentZone,
       
       // 上下文验证信息
       context: {
@@ -1296,9 +1302,10 @@ class GlassNoteSystem {
       },
       
       // 多重锚点（备用定位方案）
-      anchors: {
+      anchors: anchorData.anchors || {
         primary: anchorData.domPath,
-        byId: anchorData.byId,
+        byHierarchy: anchorData.hierarchy,
+        byContentZone: anchorData.contentZone,
         byText: anchorData.byText,
         byStructure: anchorData.byStructure
       },
@@ -1310,6 +1317,10 @@ class GlassNoteSystem {
     
     console.log('💾 准备保存增强标注数据:', {
       id: annotationId,
+      hasHierarchy: !!anchorData.hierarchy,
+      hasContentZone: !!anchorData.contentZone,
+      contentZoneType: anchorData.contentZone?.type,
+      hierarchyDepth: anchorData.hierarchy?.depth,
       text: selectedText.substring(0, 30),
       domPath: anchorData.domPath,
       textOffset: anchorData.textOffset,
@@ -1421,11 +1432,27 @@ class GlassNoteSystem {
    * 生成精确的多维度锚点信息
    */
   generatePreciseAnchor(element, selectedText, sourceInfo) {
+    console.log('🔧 开始生成精确锚点信息:', {
+      element: element.tagName,
+      className: element.className || '(无)',
+      selectedText: selectedText.substring(0, 30)
+    });
+
     // 1. HTML层级结构定位
     const hierarchyAnchor = this.generateHierarchyAnchor(element, selectedText);
+    console.log('📍 HTML层级锚点生成结果:', {
+      hasResult: !!hierarchyAnchor,
+      depth: hierarchyAnchor?.depth,
+      pathLength: hierarchyAnchor?.pathToRoot?.length
+    });
     
     // 2. 内容区域验证
     const contentZone = this.identifyContentZone(element);
+    console.log('🎯 内容区域识别结果:', {
+      type: contentZone.type,
+      confidence: contentZone.confidence,
+      isMainContent: contentZone.isMainContent
+    });
     
     // 3. 增强的DOM路径
     const domPath = this.generateEnhancedDOMPath(element);
@@ -1458,7 +1485,7 @@ class GlassNoteSystem {
     const byText = this.generateRestrictedTextAnchor(element, selectedText, beforeText, afterText, contentZone);
     const byStructure = this.generateStructuralAnchor(element);
     
-    return {
+    const result = {
       domPath,
       textOffset,
       beforeText,
@@ -1484,6 +1511,16 @@ class GlassNoteSystem {
         byStructure: byStructure
       }
     };
+
+    console.log('✅ 精确锚点信息生成完成:', {
+      hasHierarchy: !!result.hierarchy,
+      hasContentZone: !!result.contentZone,
+      hierarchyDepth: result.hierarchy?.depth,
+      contentZoneType: result.contentZone?.type,
+      anchorsCount: Object.keys(result.anchors).length
+    });
+
+    return result;
   }
 
   /**

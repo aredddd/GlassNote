@@ -725,10 +725,11 @@ class GlassNoteSystem {
    * 创建简单标注（单行、单元素内）
    */
   createSimpleAnnotation(annotationId, type, color, selectedText) {
-    const annotationSpan = this.createAnnotationElement(annotationId, type, color, selectedText);
+    // 对于简单标注，不预填充内容，让surroundContents自动填充
+    const annotationSpan = this.createAnnotationElement(annotationId, type, color, selectedText, false);
 
     try {
-      // 简单情况直接包装
+      // 简单情况直接包装 - surroundContents会自动将选中内容移入span
       this.selectedRange.surroundContents(annotationSpan);
       console.log('🎯 使用简单包装方法');
     } catch (error) {
@@ -763,18 +764,60 @@ class GlassNoteSystem {
       const spanId = `${annotationId}-part-${index}`;
       const span = this.createAnnotationElement(spanId, type, color, nodeInfo.text);
       
-      // 创建范围并替换文本节点内容
+      // 创建范围并替换文本节点内容  
       const nodeRange = document.createRange();
       nodeRange.setStart(nodeInfo.node, nodeInfo.startOffset);
       nodeRange.setEnd(nodeInfo.node, nodeInfo.endOffset);
       
       try {
+        // 修复逻辑：先删除内容，再插入包含文本的span
+        if (this.debugMode) {
+          console.log(`🔧 处理片段 ${index + 1}: "${nodeInfo.text}" (${nodeInfo.startOffset}-${nodeInfo.endOffset})`);
+        }
+        
         nodeRange.deleteContents();
         nodeRange.insertNode(span);
         annotationElements.push(span);
-        console.log(`✅ 创建标注片段 ${index + 1}/${textNodes.length}`);
+        
+        // 验证span是否正确包含文本
+        if (this.debugMode && span.textContent !== nodeInfo.text) {
+          console.warn(`⚠️ 文本内容不匹配! 期望: "${nodeInfo.text}", 实际: "${span.textContent}"`);
+        }
+        
+        console.log(`✅ 创建标注片段 ${index + 1}/${textNodes.length}:`, nodeInfo.text);
       } catch (error) {
         console.error(`❌ 创建标注片段失败 ${index + 1}:`, error);
+        // 降级处理：如果Range操作失败，尝试简单替换
+        try {
+          // span.textContent已经在createAnnotationElement中设置过了
+          if (nodeInfo.node.parentNode) {
+            nodeInfo.node.parentNode.insertBefore(span, nodeInfo.node);
+            // 如果是完整节点，删除原节点
+            if (nodeInfo.startOffset === 0 && nodeInfo.endOffset === nodeInfo.node.textContent.length) {
+              nodeInfo.node.remove();
+            } else {
+              // 部分节点，需要分割处理
+              const beforeText = nodeInfo.node.textContent.substring(0, nodeInfo.startOffset);
+              const afterText = nodeInfo.node.textContent.substring(nodeInfo.endOffset);
+              
+              if (beforeText) {
+                const beforeNode = document.createTextNode(beforeText);
+                nodeInfo.node.parentNode.insertBefore(beforeNode, span);
+              }
+              
+              if (afterText) {
+                const afterNode = document.createTextNode(afterText);
+                nodeInfo.node.parentNode.insertBefore(afterNode, span.nextSibling);
+              }
+              
+              nodeInfo.node.remove();
+            }
+            annotationElements.push(span);
+            console.log(`✅ 使用降级方法创建标注片段 ${index + 1}/${textNodes.length}`);
+          }
+        } catch (fallbackError) {
+          console.error(`❌ 降级处理也失败了:`, fallbackError);
+        }
       }
     });
 
@@ -836,7 +879,7 @@ class GlassNoteSystem {
   /**
    * 创建标注元素
    */
-  createAnnotationElement(annotationId, type, color, text) {
+  createAnnotationElement(annotationId, type, color, text, fillContent = true) {
     const annotationSpan = document.createElement('span');
     annotationSpan.className = 'glassnote-annotation';
     annotationSpan.setAttribute('data-glassnote-id', annotationId);
@@ -845,6 +888,13 @@ class GlassNoteSystem {
     
     if (color) {
       annotationSpan.setAttribute('data-glassnote-color', color);
+    }
+
+    // 条件性填充文本内容
+    // 对于简单标注，surroundContents会自动填充，不需要预先设置
+    // 对于复杂标注，需要手动设置文本内容
+    if (fillContent) {
+      annotationSpan.textContent = text;
     }
 
     // 应用CSS样式类

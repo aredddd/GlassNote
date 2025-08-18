@@ -1258,33 +1258,67 @@ class GlassNoteSystem {
    * 完成标注创建（保存数据）
    */
   finalizeAnnotation(annotationId, type, color, selectedText, mainElement) {
-    // 生成DOM路径用于后续定位
-    const domPath = this.generateDOMPath(mainElement);
+    // 先记录源信息（标注前的状态）
+    const sourceInfo = this.captureSourceContext(mainElement, selectedText);
     
-    // 存储标注数据
+    // 生成多维度锚点信息
+    const anchorData = this.generatePreciseAnchor(mainElement, selectedText, sourceInfo);
+    
+    // 存储标注数据 - 包含丰富的定位信息
     const annotationData = {
       id: annotationId,
       type: type,
       text: selectedText,
       color: color,
-      domPath: domPath,
+      
+      // 主要定位信息
+      domPath: anchorData.domPath,
+      textOffset: anchorData.textOffset,
+      
+      // 上下文验证信息
+      context: {
+        beforeText: anchorData.beforeText,
+        afterText: anchorData.afterText,
+        parentText: anchorData.parentText,
+        elementIndex: anchorData.elementIndex
+      },
+      
+      // 结构化验证信息
+      structure: {
+        tagName: anchorData.tagName,
+        elementId: anchorData.elementId,
+        classList: anchorData.classList,
+        parentTagName: anchorData.parentTagName,
+        siblingCount: anchorData.siblingCount
+      },
+      
+      // 多重锚点（备用定位方案）
+      anchors: {
+        primary: anchorData.domPath,
+        byId: anchorData.byId,
+        byText: anchorData.byText,
+        byStructure: anchorData.byStructure
+      },
+      
       createdAt: new Date().toISOString()
     };
 
     this.annotations.set(annotationId, annotationData);
     
-    console.log('💾 准备保存标注数据:', annotationData);
-    console.log('🔗 生成的DOM路径:', domPath);
-    console.log('📍 目标元素信息:', {
-      tagName: mainElement.tagName,
-      className: mainElement.className,
-      id: mainElement.id,
-      textContent: mainElement.textContent?.substring(0, 50)
+    console.log('💾 准备保存增强标注数据:', {
+      id: annotationId,
+      text: selectedText.substring(0, 30),
+      domPath: anchorData.domPath,
+      textOffset: anchorData.textOffset,
+      context: {
+        before: anchorData.beforeText?.substring(0, 20),
+        after: anchorData.afterText?.substring(0, 20)
+      }
     });
     
     this.saveAnnotation(annotationData);
 
-    console.log('✅ 标注数据已保存:', annotationData);
+    console.log('✅ 增强标注数据已保存');
   }
 
   /**
@@ -1356,7 +1390,225 @@ class GlassNoteSystem {
   }
 
   /**
-   * 生成DOM路径用于定位元素
+   * 捕获标注前的源上下文信息
+   */
+  captureSourceContext(element, selectedText) {
+    const elementText = element.textContent || '';
+    const selectedIndex = elementText.indexOf(selectedText);
+    
+    // 计算上下文边界
+    const contextLength = 50; // 前后各50个字符
+    const beforeStart = Math.max(0, selectedIndex - contextLength);
+    const afterEnd = Math.min(elementText.length, selectedIndex + selectedText.length + contextLength);
+    
+    return {
+      fullText: elementText,
+      selectedIndex: selectedIndex,
+      beforeText: elementText.substring(beforeStart, selectedIndex),
+      afterText: elementText.substring(selectedIndex + selectedText.length, afterEnd),
+      elementRect: element.getBoundingClientRect(),
+      scrollPosition: {
+        x: window.scrollX,
+        y: window.scrollY
+      }
+    };
+  }
+
+  /**
+   * 生成精确的多维度锚点信息
+   */
+  generatePreciseAnchor(element, selectedText, sourceInfo) {
+    // 1. 增强的DOM路径
+    const domPath = this.generateEnhancedDOMPath(element);
+    
+    // 2. 文本偏移信息
+    const textOffset = {
+      startIndex: sourceInfo.selectedIndex,
+      endIndex: sourceInfo.selectedIndex + selectedText.length,
+      elementTextLength: sourceInfo.fullText.length
+    };
+    
+    // 3. 上下文信息
+    const beforeText = sourceInfo.beforeText;
+    const afterText = sourceInfo.afterText;
+    const parentText = element.parentElement?.textContent?.substring(0, 200) || '';
+    
+    // 4. 元素结构信息
+    const elementIndex = this.getElementIndex(element);
+    const tagName = element.tagName;
+    const elementId = element.id || '';
+    const classList = Array.from(element.classList || []).filter(cls => 
+      !cls.startsWith('gn-') && !cls.startsWith('glassnote-')
+    );
+    const parentTagName = element.parentElement?.tagName || '';
+    const siblingCount = element.parentElement?.children?.length || 0;
+    
+    // 5. 多重备用锚点
+    const byId = elementId ? `#${elementId}` : '';
+    const byText = this.generateTextBasedAnchor(element, selectedText, beforeText, afterText);
+    const byStructure = this.generateStructuralAnchor(element);
+    
+    return {
+      domPath,
+      textOffset,
+      beforeText,
+      afterText,
+      parentText,
+      elementIndex,
+      tagName,
+      elementId,
+      classList,
+      parentTagName,
+      siblingCount,
+      byId,
+      byText,
+      byStructure
+    };
+  }
+
+  /**
+   * 生成增强的DOM路径（包含更精确的定位信息）
+   */
+  generateEnhancedDOMPath(element) {
+    const path = [];
+    let current = element;
+    
+    // 如果当前元素是标注元素，从其父元素开始
+    if (current.classList && (current.classList.contains('gn-a') || current.hasAttribute('data-gn-id'))) {
+      console.log('🏷️ 跳过标注元素，从父元素开始生成路径');
+      current = current.parentElement;
+    }
+    
+    while (current && current !== document.body && current !== document.documentElement) {
+      // 跳过标注相关的元素
+      if (current.classList && (
+          current.classList.contains('gn-a') || 
+          current.hasAttribute('data-gn-id') ||
+          current.classList.contains('gn-note-badge-inline'))) {
+        current = current.parentNode;
+        continue;
+      }
+      
+      let selector = current.tagName.toLowerCase();
+      
+      // 优先使用稳定的ID
+      if (current.id && !current.id.includes('glassnote') && !current.id.includes('gn-')) {
+        selector += `#${current.id}`;
+        path.unshift(selector);
+        break; // ID是唯一的，可以停止
+      }
+      
+      // 使用类名（过滤掉动态类名）
+      if (current.className && typeof current.className === 'string') {
+        const stableClasses = current.className.split(' ')
+          .filter(cls => 
+            cls && 
+            !cls.startsWith('glassnote-') && 
+            !cls.startsWith('gn-') &&
+            cls !== 'gn-a' &&
+            // 过滤掉可能变化的类名
+            !cls.includes('active') &&
+            !cls.includes('hover') &&
+            !cls.includes('focus') &&
+            !cls.match(/^\d+$/) // 纯数字类名通常不稳定
+          )
+          .join('.');
+        if (stableClasses) {
+          selector += `.${stableClasses}`;
+        }
+      }
+      
+      // 添加精确的位置索引
+      if (current.parentNode && current.parentNode.children) {
+        // 同标签名的兄弟元素索引
+        const sameTagSiblings = Array.from(current.parentNode.children)
+          .filter(sibling => sibling.tagName === current.tagName);
+        if (sameTagSiblings.length > 1) {
+          const index = sameTagSiblings.indexOf(current);
+          if (index >= 0) {
+            selector += `:nth-of-type(${index + 1})`;
+          }
+        }
+        
+        // 如果同标签元素很多，添加更精确的nth-child
+        if (sameTagSiblings.length > 5) {
+          const allSiblings = Array.from(current.parentNode.children);
+          const childIndex = allSiblings.indexOf(current);
+          if (childIndex >= 0) {
+            selector += `:nth-child(${childIndex + 1})`;
+          }
+        }
+      }
+      
+      path.unshift(selector);
+      current = current.parentNode;
+    }
+    
+    const finalPath = path.join(' > ');
+    console.log('🔗 生成增强DOM路径:', finalPath);
+    return finalPath;
+  }
+
+  /**
+   * 获取元素在同级元素中的索引
+   */
+  getElementIndex(element) {
+    if (!element.parentElement) return 0;
+    return Array.from(element.parentElement.children).indexOf(element);
+  }
+
+  /**
+   * 生成基于文本的锚点
+   */
+  generateTextBasedAnchor(element, selectedText, beforeText, afterText) {
+    // 创建一个唯一的文本指纹
+    const contextLength = 20;
+    const before = beforeText.slice(-contextLength).trim();
+    const after = afterText.slice(0, contextLength).trim();
+    
+    return {
+      text: selectedText,
+      before: before,
+      after: after,
+      signature: `${before}|${selectedText}|${after}`.replace(/\s+/g, ' ')
+    };
+  }
+
+  /**
+   * 生成结构化锚点
+   */
+  generateStructuralAnchor(element) {
+    const parent = element.parentElement;
+    if (!parent) return null;
+    
+    // 记录父元素的结构特征
+    const parentInfo = {
+      tagName: parent.tagName,
+      className: parent.className,
+      id: parent.id,
+      childCount: parent.children.length,
+      textLength: parent.textContent?.length || 0
+    };
+    
+    // 记录元素在父级中的位置信息
+    const siblings = Array.from(parent.children);
+    const elementIndex = siblings.indexOf(element);
+    const sameTagSiblings = siblings.filter(s => s.tagName === element.tagName);
+    const sameTagIndex = sameTagSiblings.indexOf(element);
+    
+    return {
+      parent: parentInfo,
+      position: {
+        index: elementIndex,
+        sameTagIndex: sameTagIndex,
+        totalSiblings: siblings.length,
+        sameTagSiblings: sameTagSiblings.length
+      }
+    };
+  }
+
+  /**
+   * 生成DOM路径用于定位元素（保持向后兼容）
    */
   generateDOMPath(element) {
     const path = [];
@@ -2084,7 +2336,19 @@ class GlassNoteSystem {
           console.log(`🔄 开始恢复${pageData.annotations.length}个标注`);
           let successCount = 0;
           for (const annotationData of pageData.annotations) {
-            if (await this.restoreAnnotation(annotationData)) {
+            // 优先使用增强恢复（如果数据支持），否则回退到传统方式
+            let restored = false;
+            if (annotationData.context || annotationData.structure || annotationData.anchors) {
+              console.log('🎯 使用增强恢复模式');
+              restored = await this.restoreAnnotationEnhanced(annotationData);
+            }
+            
+            if (!restored) {
+              console.log('🔄 回退到传统恢复模式');
+              restored = await this.restoreAnnotation(annotationData);
+            }
+            
+            if (restored) {
               successCount++;
             }
           }
@@ -2230,7 +2494,341 @@ class GlassNoteSystem {
   }
 
   /**
-   * 恢复DOM标注
+   * 增强版标注恢复 - 使用多维度精确定位
+   */
+  async restoreAnnotationEnhanced(annotationData) {
+    try {
+      const { id, type, text, color, context, structure, anchors, textOffset } = annotationData;
+      console.log('🔄 尝试恢复标注 (增强模式):', { 
+        id, 
+        type, 
+        text: text?.substring(0, 30),
+        hasContext: !!context,
+        hasStructure: !!structure,
+        hasAnchors: !!anchors
+      });
+
+      // 检查标注是否已存在
+      const checkId = id.startsWith('glassnote-') ? id.substring(10) : id;
+      const existingAnnotation = document.querySelector(`[data-gn-id="${checkId}"]`);
+      if (existingAnnotation) {
+        console.log('⚠️ 标注已存在，跳过恢复:', id);
+        return true;
+      }
+
+      let targetElement = null;
+      let confidence = 0;
+
+      // 策略1: 上下文验证的DOM路径定位
+      if (annotationData.domPath && context) {
+        try {
+          const candidate = document.querySelector(annotationData.domPath);
+          if (candidate) {
+            const score = this.validateElementContext(candidate, context, textOffset);
+            if (score > 70) {
+              targetElement = candidate;
+              confidence = score;
+              console.log('✅ DOM路径+上下文验证成功:', score);
+            }
+          }
+        } catch (error) {
+          console.log('⚠️ DOM路径定位失败:', error.message);
+        }
+      }
+
+      // 策略2: 结构化锚点定位
+      if (!targetElement && anchors?.byStructure) {
+        const structuralResult = this.findByStructuralAnchor(anchors.byStructure);
+        if (structuralResult.element) {
+          targetElement = structuralResult.element;
+          confidence = 80;
+          console.log('✅ 结构化锚点定位成功');
+        }
+      }
+
+      // 策略3: 文本签名定位
+      if (!targetElement && anchors?.byText) {
+        const textResult = this.findByTextSignature(anchors.byText);
+        if (textResult.element) {
+          targetElement = textResult.element;
+          confidence = 70;
+          console.log('✅ 文本签名定位成功');
+        }
+      }
+
+      // 策略4: 传统DOM路径（无上下文验证）
+      if (!targetElement && annotationData.domPath) {
+        try {
+          targetElement = document.querySelector(annotationData.domPath);
+          if (targetElement) {
+            confidence = 60;
+            console.log('✅ 传统DOM路径定位成功');
+          }
+        } catch (error) {
+          console.log('⚠️ 传统DOM路径失败:', error.message);
+        }
+      }
+
+      if (!targetElement) {
+        console.warn('❌ 增强模式定位失败:', id);
+        return false;
+      }
+
+      // 创建和恢复标注
+      const success = await this.createAnnotationWithPrecision(
+        targetElement, 
+        annotationData, 
+        confidence
+      );
+
+      if (success) {
+        this.annotations.set(id, annotationData);
+        console.log(`✅ 增强标注恢复成功 (置信度: ${confidence}):`, id);
+      }
+
+      return success;
+    } catch (error) {
+      console.error('增强标注恢复失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 验证元素上下文匹配度
+   */
+  validateElementContext(element, context, textOffset) {
+    let score = 0;
+    const elementText = element.textContent || '';
+
+    // 验证前后文本上下文 (60分)
+    if (context.beforeText) {
+      const beforeText = context.beforeText.slice(-30); // 取后30字符
+      if (elementText.includes(beforeText)) {
+        score += 30;
+      }
+    }
+    
+    if (context.afterText) {
+      const afterText = context.afterText.slice(0, 30); // 取前30字符
+      if (elementText.includes(afterText)) {
+        score += 30;
+      }
+    }
+
+    // 验证文本长度相似度 (40分)
+    if (textOffset && textOffset.elementTextLength > 0) {
+      const lengthDiff = Math.abs(elementText.length - textOffset.elementTextLength);
+      const maxLength = Math.max(elementText.length, textOffset.elementTextLength);
+      const similarity = Math.max(0, 1 - (lengthDiff / maxLength));
+      score += similarity * 40;
+    }
+
+    console.log('🔍 上下文验证得分:', score, '/', '100');
+    return score;
+  }
+
+  /**
+   * 通过结构化锚点查找元素
+   */
+  findByStructuralAnchor(structuralAnchor) {
+    if (!structuralAnchor || !structuralAnchor.parent) {
+      return { element: null };
+    }
+
+    const { parent, position } = structuralAnchor;
+    
+    try {
+      // 构建父元素选择器
+      let parentSelector = parent.tagName.toLowerCase();
+      if (parent.id) parentSelector += `#${parent.id}`;
+      if (parent.className) {
+        const classes = parent.className.split(' ')
+          .filter(c => c.trim() && !c.startsWith('gn-') && !c.startsWith('glassnote-'))
+          .join('.');
+        if (classes) parentSelector += `.${classes}`;
+      }
+
+      const parentElements = document.querySelectorAll(parentSelector);
+      
+      for (const parentEl of parentElements) {
+        // 验证父元素特征
+        if (Math.abs(parentEl.children.length - parent.childCount) <= 2) { // 允许轻微差异
+          // 通过位置信息找到目标子元素
+          if (position.index >= 0 && position.index < parentEl.children.length) {
+            const targetChild = parentEl.children[position.index];
+            return { element: targetChild };
+          }
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ 结构化锚点查找失败:', error.message);
+    }
+
+    return { element: null };
+  }
+
+  /**
+   * 通过文本签名查找元素
+   */
+  findByTextSignature(textAnchor) {
+    if (!textAnchor || !textAnchor.signature) {
+      return { element: null };
+    }
+
+    const { before, text, after } = textAnchor;
+    
+    try {
+      // 在页面中搜索匹配的文本模式
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        node => this.isContentElement(node.parentElement) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+        false
+      );
+
+      let node;
+      while (node = walker.nextNode()) {
+        const nodeText = node.textContent;
+        
+        // 检查是否包含核心文本
+        if (nodeText.includes(text)) {
+          // 验证前后文本（如果存在）
+          let matches = true;
+          if (before && !nodeText.includes(before.slice(-15))) { // 取后15字符验证
+            matches = false;
+          }
+          if (after && !nodeText.includes(after.slice(0, 15))) { // 取前15字符验证
+            matches = false;
+          }
+          
+          if (matches) {
+            return { element: node.parentElement };
+          }
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ 文本签名查找失败:', error.message);
+    }
+
+    return { element: null };
+  }
+
+  /**
+   * 使用精确度创建标注
+   */
+  async createAnnotationWithPrecision(targetElement, annotationData, confidence) {
+    try {
+      const { id, type, color, text, textOffset } = annotationData;
+      
+      // 创建标注元素
+      const annotationSpan = document.createElement('span');
+      annotationSpan.className = 'gn-a gn-base';
+      
+      const shortId = id.startsWith('glassnote-') ? id.substring(10) : id;
+      annotationSpan.setAttribute('data-gn-id', shortId);
+      annotationSpan.setAttribute('data-gn-t', type.charAt(0));
+      
+      if (color) {
+        annotationSpan.setAttribute('data-gn-c', color);
+      }
+
+      // 应用样式
+      this.applyAnnotationStyle(annotationSpan, type, color);
+
+      // 如果置信度高且有精确偏移，尝试精确恢复
+      if (confidence > 80 && textOffset) {
+        const success = this.restoreWithExactOffset(targetElement, annotationSpan, textOffset, text);
+        if (success) {
+          console.log('✅ 精确偏移恢复成功');
+          return true;
+        }
+      }
+
+      // 回退到智能文本匹配
+      const matchResult = this.findTextInElement(targetElement, text);
+      if (matchResult.found) {
+        this.createTextAnnotation(targetElement, annotationSpan, matchResult, text);
+        console.log('✅ 智能文本匹配恢复成功');
+        return true;
+      }
+
+      // 最后尝试模糊匹配
+      if (this.fuzzyTextMatch(targetElement.textContent, text)) {
+        const smartMatch = this.findBestTextMatch(targetElement.textContent, text);
+        if (smartMatch.found) {
+          this.createTextAnnotation(targetElement, annotationSpan, smartMatch, smartMatch.matchedText);
+          console.log('✅ 模糊匹配恢复成功');
+          return true;
+        }
+      }
+
+      console.warn('❌ 无法在目标元素中恢复文本内容');
+      return false;
+
+    } catch (error) {
+      console.error('精确标注创建失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 使用精确偏移恢复文本
+   */
+  restoreWithExactOffset(targetElement, annotationSpan, textOffset, expectedText) {
+    try {
+      const elementText = targetElement.textContent;
+      
+      // 验证偏移有效性
+      if (textOffset.startIndex >= 0 && 
+          textOffset.endIndex <= elementText.length &&
+          textOffset.startIndex < textOffset.endIndex) {
+        
+        const extractedText = elementText.substring(textOffset.startIndex, textOffset.endIndex);
+        
+        // 验证文本匹配（允许轻微差异）
+        if (this.fuzzyTextMatch(extractedText, expectedText)) {
+          const beforeText = elementText.substring(0, textOffset.startIndex);
+          const afterText = elementText.substring(textOffset.endIndex);
+          
+          const matchResult = {
+            found: true,
+            beforeText: beforeText,
+            afterText: afterText
+          };
+          
+          this.createTextAnnotation(targetElement, annotationSpan, matchResult, extractedText);
+          return true;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.log('⚠️ 精确偏移恢复失败:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * 创建文本标注（通用方法）
+   */
+  createTextAnnotation(targetElement, annotationSpan, matchResult, text) {
+    // 重构DOM结构
+    targetElement.innerHTML = '';
+    
+    if (matchResult.beforeText) {
+      targetElement.appendChild(document.createTextNode(matchResult.beforeText));
+    }
+    
+    annotationSpan.textContent = text;
+    targetElement.appendChild(annotationSpan);
+    
+    if (matchResult.afterText) {
+      targetElement.appendChild(document.createTextNode(matchResult.afterText));
+    }
+  }
+
+  /**
+   * 恢复DOM标注（传统方法，保持向后兼容）
    */
   async restoreAnnotation(annotationData) {
     try {

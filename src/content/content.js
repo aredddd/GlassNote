@@ -319,7 +319,7 @@ class GlassNoteSystem {
       if (!this.isEnabled || !this.toolbarContainer) return;
       
       if (!this.toolbarContainer.contains(e.target) && 
-          !e.target.closest('.glassnote-annotation') &&
+          !e.target.closest('.gn-a') &&
           !e.target.closest('.glassnote-note-badge')) {
         this.hideToolbar();
       }
@@ -551,7 +551,7 @@ class GlassNoteSystem {
     }
 
     // 检查是否直接是标注元素（只检查直接匹配）
-    if (element.classList?.contains('glassnote-annotation')) {
+    if (element.classList?.contains('gn-a')) {
       if (this.debugMode) {
         console.log('🚫 排除标注元素本身:', element.tagName);
       }
@@ -669,14 +669,15 @@ class GlassNoteSystem {
     
     this.toolbarContainer.innerHTML = `
       <div class="glassnote-toolbar-buttons">
-        <button id="highlight-btn" title="高亮标记">🖍️</button>
-        <button id="bold-btn" title="加粗">𝐁</button>
-        <button id="note-btn" title="添加便利贴">📝</button>
+        <button id="highlight-btn" title="高亮标记">🟡</button>
+        <button id="orange-underline-btn" title="橙色荧光下划线">🟠</button>
+        <button id="bold-btn" title="真正加粗">𝐁</button>
         <button id="underline-btn" title="下划线">U̲</button>
+        <button id="note-btn" title="添加便利贴">📝</button>
         <div class="glassnote-separator"></div>
-        <button id="red-btn" class="color-btn" style="color: red;" title="红色标记">●</button>
-        <button id="blue-btn" class="color-btn" style="color: blue;" title="蓝色标记">●</button>
-        <button id="green-btn" class="color-btn" style="color: green;" title="绿色标记">●</button>
+        <button id="red-btn" class="color-btn" style="color: red;" title="红色标记">🔴</button>
+        <button id="blue-btn" class="color-btn" style="color: blue;" title="蓝色标记">🔵</button>
+        <button id="green-btn" class="color-btn" style="color: green;" title="绿色标记">🟢</button>
       </div>
     `;
 
@@ -741,8 +742,16 @@ class GlassNoteSystem {
       createAnnotationWithCheck('highlight', '#ffff00');
     });
 
+    document.getElementById('orange-underline-btn')?.addEventListener('click', () => {
+      createAnnotationWithCheck('orange-underline');
+    });
+
     document.getElementById('bold-btn')?.addEventListener('click', () => {
       createAnnotationWithCheck('bold');
+    });
+
+    document.getElementById('underline-btn')?.addEventListener('click', () => {
+      createAnnotationWithCheck('underline');
     });
 
     document.getElementById('note-btn')?.addEventListener('click', () => {
@@ -753,10 +762,6 @@ class GlassNoteSystem {
       }
       // 暂时禁用便利贴功能，专注于基础标注
       alert('便利贴功能开发中，敬请期待！');
-    });
-
-    document.getElementById('underline-btn')?.addEventListener('click', () => {
-      createAnnotationWithCheck('underline');
     });
 
     document.getElementById('red-btn')?.addEventListener('click', () => {
@@ -983,30 +988,29 @@ class GlassNoteSystem {
   }
 
   /**
-   * 创建标注元素
+   * 创建标注元素（简化版）
    */
   createAnnotationElement(annotationId, type, color, text, fillContent = true) {
-    const annotationSpan = document.createElement('span');
-    annotationSpan.className = 'glassnote-annotation';
-    annotationSpan.setAttribute('data-glassnote-id', annotationId);
-    annotationSpan.setAttribute('data-glassnote-type', type);
-    annotationSpan.setAttribute('data-glassnote-text', text);
+    const span = document.createElement('span');
+    
+    // 使用简化的类名和属性
+    span.className = 'gn-a'; // glassnote-annotation 简化
+    span.setAttribute('data-gn-id', annotationId.split('-')[1]); // 只保留数字部分
+    span.setAttribute('data-gn-t', type.charAt(0)); // 只保留类型首字母
     
     if (color) {
-      annotationSpan.setAttribute('data-glassnote-color', color);
+      span.setAttribute('data-gn-c', color);
     }
 
     // 条件性填充文本内容
-    // 对于简单标注，surroundContents会自动填充，不需要预先设置
-    // 对于复杂标注，需要手动设置文本内容
     if (fillContent) {
-      annotationSpan.textContent = text;
+      span.textContent = text;
     }
 
     // 应用CSS样式类
-    this.applyAnnotationStyle(annotationSpan, type, color);
+    this.applyAnnotationStyle(span, type, color);
     
-    return annotationSpan;
+    return span;
   }
 
   /**
@@ -1033,12 +1037,30 @@ class GlassNoteSystem {
   }
 
   /**
-   * 应用标注样式
+   * 应用标注样式（简化版）
    */
   applyAnnotationStyle(element, type, color) {
-    // 移除复杂的内联样式，使用CSS类
-    element.classList.add('glassnote-base');
-    element.classList.add(`glassnote-${type}`);
+    // 使用简化的CSS类名
+    element.classList.add('gn-base');
+    
+    // 根据类型添加对应的样式类
+    switch (type) {
+      case 'highlight':
+        element.classList.add('gn-highlight');
+        break;
+      case 'bold':
+        element.classList.add('gn-bold');
+        break;
+      case 'underline':
+        element.classList.add('gn-underline');
+        break;
+      case 'orange-underline':
+        element.classList.add('gn-orange');
+        break;
+      case 'color':
+        element.classList.add('gn-color');
+        break;
+    }
     
     // 只为特定颜色设置内联样式
     if (color) {
@@ -1055,11 +1077,11 @@ class GlassNoteSystem {
 
     // 简化的悬停效果
     element.addEventListener('mouseenter', () => {
-      element.classList.add('glassnote-hover');
+      element.classList.add('gn-hover');
     });
     
     element.addEventListener('mouseleave', () => {
-      element.classList.remove('glassnote-hover');
+      element.classList.remove('gn-hover');
     });
   }
 
@@ -1139,7 +1161,7 @@ class GlassNoteSystem {
   toggleGlassNote() {
     if (this.isEnabled) {
       // 禁用：隐藏所有标注
-      const annotations = document.querySelectorAll('.glassnote-annotation');
+      const annotations = document.querySelectorAll('.gn-a');
       annotations.forEach(annotation => {
         annotation.style.display = 'none';
       });
@@ -1148,7 +1170,7 @@ class GlassNoteSystem {
       console.log('GlassNote 已禁用（标注已隐藏）');
     } else {
       // 启用：显示所有标注或启用系统
-      const annotations = document.querySelectorAll('.glassnote-annotation');
+      const annotations = document.querySelectorAll('.gn-a');
       if (annotations.length > 0) {
         // 已有标注，直接显示
         annotations.forEach(annotation => {
@@ -1252,7 +1274,7 @@ class GlassNoteSystem {
 
       // 创建标注包装元素
       const annotationSpan = document.createElement('span');
-      annotationSpan.className = 'glassnote-annotation';
+      annotationSpan.className = 'gn-a';
       annotationSpan.setAttribute('data-glassnote-id', id);
       annotationSpan.setAttribute('data-glassnote-type', type);
       annotationSpan.setAttribute('data-glassnote-text', text);
@@ -1311,7 +1333,7 @@ class GlassNoteSystem {
     let node;
     while (node = walker.nextNode()) {
       if (node.textContent.includes(text) && 
-          !node.parentElement.closest('.glassnote-annotation')) {
+          !node.parentElement.closest('.gn-a')) {
         return node.parentElement;
       }
     }
@@ -1453,7 +1475,7 @@ class GlassNoteSystem {
   clearCurrentAnnotations() {
     try {
       // 移除DOM中的所有标注元素
-      const annotations = document.querySelectorAll('.glassnote-annotation');
+      const annotations = document.querySelectorAll('.gn-a');
       annotations.forEach(annotation => {
         // 如果标注包装了其他内容，需要解开包装
         if (annotation.parentNode) {

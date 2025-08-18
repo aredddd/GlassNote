@@ -384,8 +384,19 @@ class GlassNoteSystem {
     this.selectedRange = range.cloneRange();
     
     console.log('✅ 显示标注工具栏');
-    // 显示标注工具栏
-    this.showToolbar(e.pageX, e.pageY);
+    
+    // 调试：显示坐标差异
+    if (this.debugMode) {
+      console.log('📍 鼠标坐标信息:', {
+        clientX: e.clientX, clientY: e.clientY, // 相对于视口（用于fixed定位）
+        pageX: e.pageX, pageY: e.pageY,         // 相对于文档（用于absolute定位）
+        screenX: e.screenX, screenY: e.screenY, // 相对于屏幕
+        scrollX: window.scrollX, scrollY: window.scrollY // 页面滚动量
+      });
+    }
+    
+    // 显示标注工具栏 - 使用clientX/Y因为工具栏是fixed定位
+    this.showToolbar(e.clientX, e.clientY);
   }
 
   /**
@@ -688,6 +699,8 @@ class GlassNoteSystem {
     // 详细调试信息
     const computedStyle = window.getComputedStyle(this.toolbarContainer);
     console.log('🎯 工具栏已显示', {
+      coordinateType: 'client (视口相对坐标)',
+      mousePosition: { x, y },
       originalPosition: { x: x - 100, y: y - 60 },
       adjustedPosition: { left, top },
       viewport: { width: viewportWidth, height: viewportHeight },

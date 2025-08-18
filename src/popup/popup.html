@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GlassNote</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- 头部 -->
+    <div class="popup-header">
+      <div class="logo">
+        <span class="logo-icon">🔍</span>
+        <h1 class="logo-text">GlassNote</h1>
+      </div>
+      <div class="version">v0.1.0</div>
+    </div>
+
+    <!-- 功能开关 -->
+    <div class="feature-toggle">
+      <div class="toggle-item">
+        <span class="toggle-label">启用标注功能</span>
+        <label class="switch">
+          <input type="checkbox" id="enableToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 快速功能按钮 -->
+    <div class="quick-actions">
+      <h3>快速操作</h3>
+      <div class="action-buttons">
+        <button class="action-btn highlight-btn" data-action="highlight">
+          <span class="btn-icon">🖍️</span>
+          <span class="btn-text">高亮模式</span>
+        </button>
+        <button class="action-btn note-btn" data-action="note">
+          <span class="btn-icon">📝</span>
+          <span class="btn-text">便利贴模式</span>
+        </button>
+        <button class="action-btn clear-btn" data-action="clear">
+          <span class="btn-icon">🧹</span>
+          <span class="btn-text">清除标注</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 统计信息 -->
+    <div class="stats-section">
+      <h3>当前页面统计</h3>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-number" id="highlightCount">0</div>
+          <div class="stat-label">高亮标记</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number" id="noteCount">0</div>
+          <div class="stat-label">便利贴</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number" id="totalCount">0</div>
+          <div class="stat-label">总标注数</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 快捷键说明 -->
+    <div class="shortcuts-section">
+      <h3>快捷键</h3>
+      <div class="shortcut-list">
+        <div class="shortcut-item">
+          <span class="shortcut-key">Ctrl + Shift + G</span>
+          <span class="shortcut-desc">切换标注显示</span>
+        </div>
+        <div class="shortcut-item">
+          <span class="shortcut-key">选中文本</span>
+          <span class="shortcut-desc">显示标注工具栏</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部链接 -->
+    <div class="popup-footer">
+      <div class="footer-links">
+        <a href="#" id="exportBtn">导出数据</a>
+        <a href="#" id="settingsBtn">设置</a>
+        <a href="https://github.com/aredddd/GlassNote" target="_blank">GitHub</a>
+      </div>
+      <div class="footer-copyright">
+        © 2024 GlassNote
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

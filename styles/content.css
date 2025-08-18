@@ -1,0 +1,161 @@
+/**
+ * GlassNote 内容脚本样式
+ * 定义图层覆盖元素的视觉样式
+ */
+
+/* 工具栏样式 */
+#glassnote-toolbar {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.glassnote-toolbar-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.glassnote-toolbar-buttons button {
+  border: none;
+  background: #f5f5f5;
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+  min-width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.glassnote-toolbar-buttons button:hover {
+  background: #e0e0e0;
+}
+
+.glassnote-toolbar-buttons button:active {
+  background: #d0d0d0;
+}
+
+.glassnote-separator {
+  width: 1px;
+  height: 20px;
+  background: #ddd;
+  margin: 0 4px;
+}
+
+.color-btn {
+  font-size: 16px !important;
+  font-weight: bold;
+}
+
+/* 标注元素样式 */
+.glassnote-annotation {
+  transition: opacity 0.2s ease;
+}
+
+.glassnote-annotation:hover {
+  opacity: 0.6 !important;
+}
+
+/* 便利贴角标样式 */
+.glassnote-note-badge {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glassnote-note-badge:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+}
+
+/* 便利贴弹窗样式 */
+.glassnote-note-popup {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  animation: fadeInUp 0.2s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.note-header {
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 4px;
+}
+
+.note-content {
+  color: #555;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.note-actions button {
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.note-actions button:hover {
+  background: #357abd;
+}
+
+/* 选中文本的高亮效果增强 */
+::selection {
+  background: rgba(74, 144, 226, 0.2);
+}
+
+::-moz-selection {
+  background: rgba(74, 144, 226, 0.2);
+}
+
+/* 确保图层容器不干扰页面交互 */
+#glassnote-layer {
+  pointer-events: none;
+}
+
+#glassnote-layer > * {
+  pointer-events: auto;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  #glassnote-toolbar {
+    transform: scale(0.9);
+    transform-origin: center;
+  }
+  
+  .glassnote-note-popup {
+    max-width: 250px;
+    font-size: 12px;
+  }
+  
+  .glassnote-note-badge {
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+  }
+}
+
+/* 打印时隐藏所有GlassNote元素 */
+@media print {
+  #glassnote-layer,
+  #glassnote-toolbar,
+  .glassnote-note-popup {
+    display: none !important;
+  }
+}

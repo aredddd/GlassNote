@@ -393,6 +393,23 @@ class GlassNoteLayer {
   }
 
   /**
+   * 清除所有标注
+   */
+  clearAllAnnotations() {
+    try {
+      // 清除所有图层元素
+      this.layerContainer.innerHTML = '';
+      
+      // 清除内存中的数据
+      this.layerElements.clear();
+      
+      console.log('已清除所有标注');
+    } catch (error) {
+      console.error('清除标注失败:', error);
+    }
+  }
+
+  /**
    * 保存标注到本地存储
    */
   async saveAnnotation(annotationData) {
@@ -524,7 +541,29 @@ const glassNote = new GlassNoteLayer();
 
 // 监听来自扩展的消息
 chrome.runtime.onMessage?.addListener((request, sender, sendResponse) => {
-  if (request.action === 'toggle') {
-    glassNote.toggleGlassNote();
+  try {
+    switch (request.action) {
+      case 'toggle':
+        glassNote.toggleGlassNote();
+        break;
+      case 'setMode':
+        // 设置标注模式（暂时只记录，后续可扩展）
+        console.log(`切换到${request.mode}模式`);
+        break;
+      case 'clearAll':
+        glassNote.clearAllAnnotations();
+        break;
+      default:
+        console.warn('未知的消息action:', request.action);
+    }
+    
+    // 发送响应表示消息已处理
+    sendResponse({ success: true });
+  } catch (error) {
+    console.error('处理扩展消息失败:', error);
+    sendResponse({ success: false, error: error.message });
   }
+  
+  // 返回true表示异步响应
+  return true;
 });

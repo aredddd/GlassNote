@@ -32,6 +32,41 @@ class GlassNotePopup {
   }
 
   /**
+   * 安全发送消息到content script
+   */
+  async sendMessageSafely(message) {
+    if (!this.currentTab) {
+      console.warn('没有活动标签页');
+      return false;
+    }
+
+    // 检查URL是否支持content script
+    const unsupportedProtocols = ['chrome:', 'chrome-extension:', 'moz-extension:', 'edge:', 'about:'];
+    const url = this.currentTab.url || '';
+    
+    if (unsupportedProtocols.some(protocol => url.startsWith(protocol))) {
+      this.showToast('此页面不支持标注功能');
+      return false;
+    }
+
+    try {
+      await chrome.tabs.sendMessage(this.currentTab.id, message);
+      return true;
+    } catch (error) {
+      console.error('发送消息失败:', error);
+      
+      // 检查是否是连接错误
+      if (error.message.includes('Could not establish connection') || 
+          error.message.includes('Receiving end does not exist')) {
+        this.showToast('页面还未完全加载，请稍后再试');
+      } else {
+        this.showToast('操作失败，请重试');
+      }
+      return false;
+    }
+  }
+
+  /**
    * 设置事件监听器
    */
   setupEventListeners() {
@@ -70,16 +105,17 @@ class GlassNotePopup {
       await chrome.storage.sync.set({ enabled: enabled });
       
       // 向内容脚本发送消息
-      if (this.currentTab) {
-        chrome.tabs.sendMessage(this.currentTab.id, {
-          action: 'toggle',
-          enabled: enabled
-        });
-      }
+      const success = await this.sendMessageSafely({
+        action: 'toggle',
+        enabled: enabled
+      });
 
-      console.log(`GlassNote ${enabled ? '已启用' : '已禁用'}`);
+      if (success) {
+        console.log(`GlassNote ${enabled ? '已启用' : '已禁用'}`);
+      }
     } catch (error) {
       console.error('切换功能失败:', error);
+      this.showToast('设置保存失败');
     }
   }
 
@@ -93,20 +129,24 @@ class GlassNotePopup {
       switch (action) {
         case 'highlight':
           // 激活高亮模式
-          chrome.tabs.sendMessage(this.currentTab.id, {
+          const highlightSuccess = await this.sendMessageSafely({
             action: 'setMode',
             mode: 'highlight'
           });
-          this.showToast('高亮模式已激活');
+          if (highlightSuccess) {
+            this.showToast('高亮模式已激活');
+          }
           break;
 
         case 'note':
           // 激活便利贴模式
-          chrome.tabs.sendMessage(this.currentTab.id, {
+          const noteSuccess = await this.sendMessageSafely({
             action: 'setMode',
             mode: 'note'
           });
-          this.showToast('便利贴模式已激活');
+          if (noteSuccess) {
+            this.showToast('便利贴模式已激活');
+          }
           break;
 
         case 'clear':
@@ -135,7 +175,7 @@ class GlassNotePopup {
       await chrome.storage.local.remove([url]);
 
       // 通知内容脚本清除显示的标注
-      chrome.tabs.sendMessage(this.currentTab.id, {
+      await this.sendMessageSafely({
         action: 'clearAll'
       });
 

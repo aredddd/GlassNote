@@ -1304,8 +1304,6 @@ class GlassNoteSystem {
       // 多重锚点（备用定位方案）
       anchors: anchorData.anchors || {
         primary: anchorData.domPath,
-        byHierarchy: anchorData.hierarchy,
-        byContentZone: anchorData.contentZone,
         byText: anchorData.byText,
         byStructure: anchorData.byStructure
       },
@@ -1505,8 +1503,6 @@ class GlassNoteSystem {
       // 更新多重锚点
       anchors: {
         primary: domPath,
-        byHierarchy: byHierarchy,
-        byContentZone: byContentZone,
         byText: byText,
         byStructure: byStructure
       }
@@ -2539,7 +2535,8 @@ class GlassNoteSystem {
           for (const annotationData of pageData.annotations) {
             // 优先使用增强恢复（如果数据支持），否则回退到传统方式
             let restored = false;
-            if (annotationData.context || annotationData.structure || annotationData.anchors) {
+            if (annotationData.hierarchy || annotationData.contentZone || 
+                annotationData.context || annotationData.structure || annotationData.anchors) {
               console.log('🎯 使用增强恢复模式');
               restored = await this.restoreAnnotationEnhanced(annotationData);
             }
@@ -3674,10 +3671,23 @@ class GlassNoteSystem {
       return false;
     }
     
+    // 🆕 使用内容区域识别来排除页面结构元素
+    const contentZone = this.identifyContentZone(element);
+    if (contentZone.type === 'non-content' && contentZone.confidence > 30) {
+      console.log('🚫 排除非内容区域元素:', {
+        tagName: element.tagName,
+        className: element.className || '(无)',
+        zoneType: contentZone.type,
+        confidence: contentZone.confidence
+      });
+      return false;
+    }
+    
     console.log('✅ 有效内容元素:', {
       tagName: element.tagName,
       className: element.className || '(无)',
-      textLength: elementText.length
+      textLength: elementText.length,
+      contentZone: contentZone.type
     });
     
     return true;

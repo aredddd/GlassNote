@@ -43,15 +43,19 @@ class GlassNoteLayer {
     this.toolbarContainer = document.createElement('div');
     this.toolbarContainer.id = 'glassnote-toolbar';
     this.toolbarContainer.style.cssText = `
-      position: fixed;
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      padding: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      display: none;
-      z-index: 1000000;
-      pointer-events: auto;
+      position: fixed !important;
+      background: white !important;
+      border: 1px solid #ccc !important;
+      border-radius: 8px !important;
+      padding: 8px !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+      display: none !important;
+      z-index: 2147483647 !important;
+      pointer-events: auto !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      font-size: 14px !important;
+      line-height: 1.4 !important;
+      color: #333 !important;
     `;
     document.body.appendChild(this.toolbarContainer);
   }
@@ -60,9 +64,11 @@ class GlassNoteLayer {
    * 设置事件监听器
    */
   setupEventListeners() {
-    // 监听文本选择
+    // 防抖处理文本选择，避免频繁触发
+    let selectionTimeout;
     document.addEventListener('mouseup', (e) => {
-      setTimeout(() => this.handleTextSelection(e), 10);
+      clearTimeout(selectionTimeout);
+      selectionTimeout = setTimeout(() => this.handleTextSelection(e), 50);
     });
 
     // 监听键盘快捷键
@@ -73,12 +79,19 @@ class GlassNoteLayer {
       }
     });
 
-    // 点击空白处隐藏工具栏
+    // 点击空白处隐藏工具栏（使用事件委托优化性能）
     document.addEventListener('click', (e) => {
-      if (!this.toolbarContainer.contains(e.target)) {
+      if (!this.toolbarContainer.contains(e.target) && 
+          !e.target.closest('.glassnote-annotation') &&
+          !e.target.closest('.glassnote-note-badge')) {
         this.hideToolbar();
       }
-    });
+    }, { passive: true });
+
+    // 监听滚动事件，隐藏工具栏避免位置错乱
+    document.addEventListener('scroll', () => {
+      this.hideToolbar();
+    }, { passive: true });
   }
 
   /**
@@ -86,19 +99,35 @@ class GlassNoteLayer {
    */
   handleTextSelection(e) {
     const selection = window.getSelection();
-    if (!selection.rangeCount || selection.isCollapsed) {
+    
+    // 更严格的选择检查
+    if (!selection || !selection.rangeCount || selection.isCollapsed) {
       this.hideToolbar();
       return;
     }
 
     this.selectedText = selection.toString().trim();
-    if (this.selectedText.length === 0) {
+    if (this.selectedText.length < 1) {
+      this.hideToolbar();
+      return;
+    }
+
+    // 检查选择是否在可编辑元素内（避免干扰输入框等）
+    const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+    const isInEditableElement = container.nodeType === Node.TEXT_NODE ? 
+      container.parentElement?.isContentEditable || 
+      container.parentElement?.closest('input, textarea, [contenteditable="true"]') :
+      container.isContentEditable || 
+      container.closest?.('input, textarea, [contenteditable="true"]');
+    
+    if (isInEditableElement) {
       this.hideToolbar();
       return;
     }
 
     // 显示标注工具栏
-    this.showToolbar(e.pageX, e.pageY, selection.getRangeAt(0));
+    this.showToolbar(e.pageX, e.pageY, range);
   }
 
   /**
@@ -169,43 +198,62 @@ class GlassNoteLayer {
     if (!this.currentRange) return;
 
     const annotationId = `annotation-${Date.now()}`;
-    const rect = this.currentRange.getBoundingClientRect();
     
-    // 创建图层标注元素
-    const layerElement = document.createElement('div');
-    layerElement.className = 'glassnote-annotation';
-    layerElement.id = annotationId;
-    layerElement.style.cssText = `
-      position: absolute;
-      left: ${rect.left + window.scrollX}px;
-      top: ${rect.top + window.scrollY}px;
-      width: ${rect.width}px;
-      height: ${rect.height}px;
-      pointer-events: none;
-      border-radius: 3px;
-    `;
+    // 获取选中文本的所有矩形区域（支持跨行选择）
+    const rects = this.currentRange.getClientRects();
+    const allPositions = [];
+    
+    // 为每个矩形创建标注元素
+    for (let i = 0; i < rects.length; i++) {
+      const rect = rects[i];
+      if (rect.width === 0 || rect.height === 0) continue; // 跳过空矩形
+      
+      const layerElement = document.createElement('div');
+      layerElement.className = 'glassnote-annotation';
+      layerElement.id = `${annotationId}-${i}`;
+      layerElement.style.cssText = `
+        position: absolute !important;
+        left: ${rect.left + window.scrollX}px !important;
+        top: ${rect.top + window.scrollY}px !important;
+        width: ${rect.width}px !important;
+        height: ${rect.height}px !important;
+        pointer-events: none !important;
+        border-radius: 3px !important;
+        box-sizing: border-box !important;
+      `;
 
-    // 根据类型设置样式
-    switch (type) {
-      case 'highlight':
-        layerElement.style.background = color || '#ffff00';
-        layerElement.style.opacity = '0.3';
-        break;
-      case 'bold':
-        layerElement.style.border = '2px solid #333';
-        layerElement.style.background = 'rgba(0,0,0,0.05)';
-        break;
-      case 'underline':
-        layerElement.style.borderBottom = '2px solid #333';
-        break;
-      case 'color':
-        layerElement.style.background = color;
-        layerElement.style.opacity = '0.2';
-        layerElement.style.border = `1px solid ${color}`;
-        break;
+      // 根据类型设置样式
+      switch (type) {
+        case 'highlight':
+          layerElement.style.background = color || '#ffff00';
+          layerElement.style.opacity = '0.3';
+          break;
+        case 'bold':
+          // 改进加粗效果：使用阴影和边框组合
+          layerElement.style.background = 'rgba(255, 165, 0, 0.1)';
+          layerElement.style.border = '1px solid #ff8c00';
+          layerElement.style.boxShadow = 'inset 0 0 0 1px rgba(255, 140, 0, 0.3)';
+          break;
+        case 'underline':
+          layerElement.style.borderBottom = '2px solid #333';
+          break;
+        case 'color':
+          layerElement.style.background = color;
+          layerElement.style.opacity = '0.2';
+          layerElement.style.border = `1px solid ${color}`;
+          break;
+      }
+
+      this.layerContainer.appendChild(layerElement);
+      
+      // 记录位置信息
+      allPositions.push({
+        left: rect.left + window.scrollX,
+        top: rect.top + window.scrollY,
+        width: rect.width,
+        height: rect.height
+      });
     }
-
-    this.layerContainer.appendChild(layerElement);
 
     // 存储标注数据
     const annotationData = {
@@ -213,12 +261,7 @@ class GlassNoteLayer {
       type: type,
       text: this.selectedText,
       color: color,
-      position: {
-        left: rect.left + window.scrollX,
-        top: rect.top + window.scrollY,
-        width: rect.width,
-        height: rect.height
-      },
+      positions: allPositions, // 存储多个位置
       createdAt: new Date().toISOString()
     };
 
@@ -392,30 +435,34 @@ class GlassNoteLayer {
    * 恢复标注元素
    */
   restoreAnnotation(annotationData) {
-    const { id, type, color, position, content } = annotationData;
+    const { id, type, color, position, positions, content } = annotationData;
     
     if (type === 'note') {
-      // 恢复便利贴
+      // 恢复便利贴（使用第一个位置或单一位置）
+      const pos = position || (positions && positions[0]);
+      if (!pos) return;
+      
       const badge = document.createElement('div');
       badge.className = 'glassnote-note-badge';
       badge.id = `badge-${id}`;
       badge.textContent = '📝';
       badge.style.cssText = `
-        position: absolute;
-        left: ${position.left}px;
-        top: ${position.top}px;
-        width: 20px;
-        height: 20px;
-        background: #ff6b35;
-        color: white;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        font-size: 12px;
-        pointer-events: auto;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        position: absolute !important;
+        left: ${pos.left}px !important;
+        top: ${pos.top}px !important;
+        width: 20px !important;
+        height: 20px !important;
+        background: #ff6b35 !important;
+        color: white !important;
+        border-radius: 50% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        font-size: 12px !important;
+        pointer-events: auto !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+        z-index: 999999 !important;
       `;
       
       badge.addEventListener('click', () => {
@@ -424,41 +471,48 @@ class GlassNoteLayer {
       
       this.layerContainer.appendChild(badge);
     } else {
-      // 恢复其他类型标注
-      const layerElement = document.createElement('div');
-      layerElement.className = 'glassnote-annotation';
-      layerElement.id = id;
-      layerElement.style.cssText = `
-        position: absolute;
-        left: ${position.left}px;
-        top: ${position.top}px;
-        width: ${position.width}px;
-        height: ${position.height}px;
-        pointer-events: none;
-        border-radius: 3px;
-      `;
+      // 恢复其他类型标注（支持多位置）
+      const positionsArray = positions || (position ? [position] : []);
+      
+      positionsArray.forEach((pos, index) => {
+        const layerElement = document.createElement('div');
+        layerElement.className = 'glassnote-annotation';
+        layerElement.id = `${id}-${index}`;
+        layerElement.style.cssText = `
+          position: absolute !important;
+          left: ${pos.left}px !important;
+          top: ${pos.top}px !important;
+          width: ${pos.width}px !important;
+          height: ${pos.height}px !important;
+          pointer-events: none !important;
+          border-radius: 3px !important;
+          box-sizing: border-box !important;
+        `;
 
-      // 设置样式
-      switch (type) {
-        case 'highlight':
-          layerElement.style.background = color || '#ffff00';
-          layerElement.style.opacity = '0.3';
-          break;
-        case 'bold':
-          layerElement.style.border = '2px solid #333';
-          layerElement.style.background = 'rgba(0,0,0,0.05)';
-          break;
-        case 'underline':
-          layerElement.style.borderBottom = '2px solid #333';
-          break;
-        case 'color':
-          layerElement.style.background = color;
-          layerElement.style.opacity = '0.2';
-          layerElement.style.border = `1px solid ${color}`;
-          break;
-      }
+        // 设置样式
+        switch (type) {
+          case 'highlight':
+            layerElement.style.background = color || '#ffff00';
+            layerElement.style.opacity = '0.3';
+            break;
+          case 'bold':
+            // 使用改进的加粗效果
+            layerElement.style.background = 'rgba(255, 165, 0, 0.1)';
+            layerElement.style.border = '1px solid #ff8c00';
+            layerElement.style.boxShadow = 'inset 0 0 0 1px rgba(255, 140, 0, 0.3)';
+            break;
+          case 'underline':
+            layerElement.style.borderBottom = '2px solid #333';
+            break;
+          case 'color':
+            layerElement.style.background = color;
+            layerElement.style.opacity = '0.2';
+            layerElement.style.border = `1px solid ${color}`;
+            break;
+        }
 
-      this.layerContainer.appendChild(layerElement);
+        this.layerContainer.appendChild(layerElement);
+      });
     }
     
     this.layerElements.set(id, annotationData);

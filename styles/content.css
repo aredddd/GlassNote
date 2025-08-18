@@ -88,16 +88,23 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* 便利贴编辑器样式 */
-.gn-note-editor-content {
+/* 便利贴编辑器窗口样式 */
+.gn-note-editor-window {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
   background: white !important;
   border-radius: 12px !important;
-  width: 600px !important;
-  max-width: 90vw !important;
-  max-height: 80vh !important;
+  width: 900px !important;
+  height: 600px !important;
+  max-width: 95vw !important;
+  max-height: 90vh !important;
   box-shadow: 0 20px 40px rgba(0,0,0,0.3) !important;
   overflow: hidden !important;
   animation: gn-note-fade-in 0.3s ease !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 @keyframes gn-note-fade-in {
@@ -111,39 +118,139 @@
   }
 }
 
+/* 新的标题栏样式 */
 .gn-note-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
   color: white !important;
-  padding: 16px 20px !important;
+  padding: 12px 16px !important;
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
+  user-select: none !important;
+  cursor: move !important;
 }
 
-.gn-note-header h3 {
-  margin: 0 !important;
-  font-size: 18px !important;
+.gn-note-title {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.gn-note-title span:first-child {
+  font-size: 16px !important;
   font-weight: 600 !important;
 }
 
-.gn-note-close {
+.gn-note-selected-text {
+  font-size: 12px !important;
+  opacity: 0.8 !important;
+  font-style: italic !important;
+}
+
+.gn-note-controls {
+  display: flex !important;
+  gap: 4px !important;
+}
+
+.gn-note-minimize, .gn-note-close {
   background: none !important;
   border: none !important;
   color: white !important;
-  font-size: 24px !important;
+  font-size: 18px !important;
   cursor: pointer !important;
   padding: 0 !important;
-  width: 30px !important;
-  height: 30px !important;
-  border-radius: 50% !important;
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 4px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   transition: background-color 0.2s ease !important;
 }
 
-.gn-note-close:hover {
+.gn-note-minimize:hover, .gn-note-close:hover {
   background: rgba(255,255,255,0.2) !important;
+}
+
+/* Markdown工具栏 */
+.gn-note-toolbar {
+  background: #f8f9fa !important;
+  border-bottom: 1px solid #e9ecef !important;
+  padding: 8px 12px !important;
+  display: flex !important;
+  gap: 4px !important;
+  flex-wrap: wrap !important;
+}
+
+.gn-md-btn {
+  background: white !important;
+  border: 1px solid #dee2e6 !important;
+  border-radius: 4px !important;
+  padding: 6px 10px !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #495057 !important;
+  transition: all 0.2s ease !important;
+  min-width: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.gn-md-btn:hover {
+  background: #667eea !important;
+  color: white !important;
+  border-color: #667eea !important;
+  transform: translateY(-1px) !important;
+}
+
+/* 分屏内容区域 */
+.gn-note-content {
+  flex: 1 !important;
+  display: flex !important;
+  min-height: 0 !important;
+}
+
+.gn-note-editor-panel, .gn-note-preview-panel {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+.gn-note-preview-panel {
+  border-left: 1px solid #e9ecef !important;
+}
+
+.gn-note-panel-header {
+  background: #f8f9fa !important;
+  padding: 8px 16px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #6c757d !important;
+  border-bottom: 1px solid #e9ecef !important;
+}
+
+#gn-note-textarea {
+  flex: 1 !important;
+  border: none !important;
+  padding: 16px !important;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  resize: none !important;
+  outline: none !important;
+  background: #fff !important;
+}
+
+.gn-note-preview-content {
+  flex: 1 !important;
+  padding: 16px !important;
+  overflow-y: auto !important;
+  background: #fff !important;
+  line-height: 1.6 !important;
+  color: #333 !important;
 }
 
 .gn-note-body {
@@ -436,6 +543,29 @@
   padding: 1px 3px !important;
   border-radius: 2px !important;
   border: 1px solid rgba(0,0,0,0.1) !important;
+}
+
+/* 便利贴样式 */
+.gn-note {
+  border-bottom: 2px dashed #ff6b35 !important;
+  background: rgba(255, 107, 53, 0.1) !important;
+  padding: 1px 2px !important;
+  border-radius: 2px !important;
+  text-decoration: none !important;
+}
+
+/* 内联便利贴角标 */
+.gn-note-badge-inline {
+  display: inline-block !important;
+  margin-left: 2px !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  transition: transform 0.2s ease !important;
+  vertical-align: baseline !important;
+}
+
+.gn-note-badge-inline:hover {
+  transform: scale(1.2) !important;
 }
 
 /* 悬停效果 */

@@ -157,16 +157,54 @@
   }
 }
 
-/* DOM内联标注样式 */
+/* DOM内联标注基础样式 */
 .glassnote-annotation {
   position: relative !important;
   display: inline !important;
-  transition: all 0.2s ease !important;
-  cursor: pointer !important;
 }
 
-.glassnote-annotation:hover {
-  transform: scale(1.02) !important;
+/* 基础标注样式 */
+.glassnote-base {
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  box-decoration-break: clone !important;
+  -webkit-box-decoration-break: clone !important;
+}
+
+/* 高亮标注 */
+.glassnote-highlight {
+  background-color: #ffff00 !important;
+  padding: 0 2px !important;
+  border-radius: 2px !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 0, 0.3) !important;
+}
+
+/* 加粗标注 - 更简洁的设计 */
+.glassnote-bold {
+  background: linear-gradient(120deg, rgba(255, 165, 0, 0.1) 0%, rgba(255, 140, 0, 0.1) 100%) !important;
+  border-bottom: 2px solid #ff8c00 !important;
+  font-weight: 600 !important;
+  padding: 0 1px !important;
+}
+
+/* 下划线标注 */
+.glassnote-underline {
+  border-bottom: 2px solid #333 !important;
+  text-decoration: none !important;
+}
+
+/* 彩色标注 */
+.glassnote-color {
+  padding: 1px 3px !important;
+  border-radius: 3px !important;
+  font-weight: 500 !important;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.1) !important;
+}
+
+/* 悬停效果 */
+.glassnote-hover {
+  transform: scale(1.01) !important;
+  filter: brightness(1.1) !important;
   z-index: 999 !important;
 }
 
@@ -183,25 +221,87 @@
 }
 
 /* 确保标注元素不影响原始布局 */
+.glassnote-annotation,
 .glassnote-annotation * {
   font-family: inherit !important;
   font-size: inherit !important;
   line-height: inherit !important;
+  letter-spacing: inherit !important;
+  word-spacing: inherit !important;
+  text-align: inherit !important;
+}
+
+/* 保持文本选择行为正常 */
+.glassnote-annotation {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+/* 确保跨行标注正确显示 */
+.glassnote-base {
+  box-decoration-break: clone !important;
+  -webkit-box-decoration-break: clone !important;
+}
+
+/* 防止标注影响链接和其他交互元素 */
+.glassnote-annotation a,
+.glassnote-annotation button,
+.glassnote-annotation input {
+  pointer-events: auto !important;
+}
+
+/* 优化移动端显示 */
+@media (max-width: 768px) {
+  .glassnote-base {
+    transition: none !important;
+  }
+  
+  .glassnote-hover {
+    transform: none !important;
+    filter: none !important;
+  }
 }
 
 /* 打印时隐藏所有GlassNote元素 */
 @media print {
   #glassnote-toolbar,
   #glassnote-load-dialog,
+  #glassnote-enable-prompt,
+  #glassnote-context-invalid,
   .glassnote-note-popup {
     display: none !important;
   }
   
   /* 打印时保留标注但简化样式 */
-  .glassnote-annotation {
+  .glassnote-base {
     background: none !important;
     border: none !important;
     box-shadow: none !important;
+    filter: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  
+  .glassnote-highlight {
+    background: #f0f0f0 !important;
+    text-decoration: none !important;
+  }
+  
+  .glassnote-bold {
+    background: none !important;
+    font-weight: bold !important;
+    text-decoration: none !important;
+  }
+  
+  .glassnote-underline {
+    text-decoration: underline !important;
+  }
+  
+  .glassnote-color {
+    background: none !important;
+    color: inherit !important;
     text-decoration: underline !important;
   }
 }

@@ -531,52 +531,47 @@ class GlassNoteSystem {
    * 应用标注样式
    */
   applyAnnotationStyle(element, type, color) {
-    const baseStyle = `
-      transition: all 0.2s ease !important;
-      cursor: pointer !important;
-    `;
+    // 移除复杂的内联样式，使用CSS类
+    element.classList.add('glassnote-base');
+    element.classList.add(`glassnote-${type}`);
     
-    switch (type) {
-      case 'highlight':
-        element.style.cssText = baseStyle + `
-          background-color: ${color || '#ffff00'} !important;
-          padding: 1px 2px !important;
-          border-radius: 2px !important;
-        `;
-        break;
-      case 'bold':
-        element.style.cssText = baseStyle + `
-          background: rgba(255, 165, 0, 0.15) !important;
-          border: 1px solid #ff8c00 !important;
-          padding: 1px 3px !important;
-          border-radius: 3px !important;
-          font-weight: bold !important;
-        `;
-        break;
-      case 'underline':
-        element.style.cssText = baseStyle + `
-          border-bottom: 2px solid #333 !important;
-          padding-bottom: 1px !important;
-        `;
-        break;
-      case 'color':
-        element.style.cssText = baseStyle + `
-          background-color: ${color} !important;
-          color: white !important;
-          padding: 1px 3px !important;
-          border-radius: 2px !important;
-        `;
-        break;
+    // 只为特定颜色设置内联样式
+    if (color) {
+      switch (type) {
+        case 'highlight':
+          element.style.backgroundColor = color;
+          break;
+        case 'color':
+          element.style.backgroundColor = color;
+          element.style.color = this.getContrastColor(color);
+          break;
+      }
     }
 
-    // 添加悬停效果
+    // 简化的悬停效果
     element.addEventListener('mouseenter', () => {
-      element.style.opacity = '0.8';
+      element.classList.add('glassnote-hover');
     });
     
     element.addEventListener('mouseleave', () => {
-      element.style.opacity = '1';
+      element.classList.remove('glassnote-hover');
     });
+  }
+
+  /**
+   * 获取对比色（简单的黑白判断）
+   */
+  getContrastColor(hexColor) {
+    // 移除#号
+    const hex = hexColor.replace('#', '');
+    // 转换为RGB
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    // 计算亮度
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    // 返回对比色
+    return brightness > 155 ? '#000000' : '#ffffff';
   }
 
   /**
@@ -753,7 +748,6 @@ class GlassNoteSystem {
       // 创建标注包装元素
       const annotationSpan = document.createElement('span');
       annotationSpan.className = 'glassnote-annotation';
-      annotationSpan.classList.add(`glassnote-${type}`);
       annotationSpan.setAttribute('data-glassnote-id', id);
       annotationSpan.setAttribute('data-glassnote-type', type);
       annotationSpan.setAttribute('data-glassnote-text', text);

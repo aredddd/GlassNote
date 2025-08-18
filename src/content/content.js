@@ -366,6 +366,215 @@ class GlassNoteSystem {
   }
 
   /**
+   * 标准化文本：统一空格、换行符、标点符号等
+   */
+  normalizeText(text) {
+    if (!text) return '';
+    
+    return text
+      // 统一换行符
+      .replace(/\r\n|\r|\n/g, ' ')
+      // 统一多个空格为单个空格
+      .replace(/\s+/g, ' ')
+      // 统一不同类型的破折号、连字符
+      .replace(/[－–—―\-]/g, '-')
+      // 统一引号
+      .replace(/[""'']/g, '"')
+      // 统一省略号
+      .replace(/…/g, '...')
+      // 去除首尾空格
+      .trim();
+  }
+
+  /**
+   * 智能文本匹配：处理标准化后仍不匹配的情况
+   */
+  fuzzyTextMatch(haystack, needle) {
+    if (!haystack || !needle) return false;
+    
+    const normalizedHaystack = this.normalizeText(haystack);
+    const normalizedNeedle = this.normalizeText(needle);
+    
+    // 1. 直接包含检查
+    if (normalizedHaystack.includes(normalizedNeedle)) {
+      return true;
+    }
+    
+    // 2. 移除所有标点符号后检查
+    const cleanHaystack = normalizedHaystack.replace(/[^\w\s\u4e00-\u9fff]/g, '');
+    const cleanNeedle = normalizedNeedle.replace(/[^\w\s\u4e00-\u9fff]/g, '');
+    
+    if (cleanHaystack.includes(cleanNeedle)) {
+      console.log('✅ 移除标点符号后匹配成功');
+      return true;
+    }
+    
+    // 3. 部分匹配检查 (至少80%相似度)
+    if (cleanNeedle.length > 10) {
+      const similarity = this.calculateSimilarity(cleanHaystack, cleanNeedle);
+      if (similarity > 0.8) {
+        console.log('✅ 相似度匹配成功:', similarity);
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * 计算两个字符串的相似度 (Levenshtein距离)
+   */
+  calculateSimilarity(str1, str2) {
+    const matrix = [];
+    const len1 = str1.length;
+    const len2 = str2.length;
+
+    for (let i = 0; i <= len1; i++) {
+      matrix[i] = [i];
+    }
+
+    for (let j = 0; j <= len2; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= len1; i++) {
+      for (let j = 1; j <= len2; j++) {
+        if (str1[i - 1] === str2[j - 1]) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+
+    const distance = matrix[len1][len2];
+    return 1 - distance / Math.max(len1, len2);
+  }
+
+  /**
+   * 在元素中查找文本的精确位置 (支持标准化匹配)
+   */
+  findTextInElement(element, searchText) {
+    const textContent = element.textContent;
+    const normalizedContent = this.normalizeText(textContent);
+    const normalizedSearch = this.normalizeText(searchText);
+    
+    // 尝试直接匹配
+    if (textContent.includes(searchText)) {
+      const startIndex = textContent.indexOf(searchText);
+      const endIndex = startIndex + searchText.length;
+      return {
+        found: true,
+        beforeText: textContent.substring(0, startIndex),
+        matchedText: searchText,
+        afterText: textContent.substring(endIndex)
+      };
+    }
+    
+    // 尝试标准化后匹配
+    if (normalizedContent.includes(normalizedSearch)) {
+      // 需要映射回原始文本中的位置
+      const normalizedIndex = normalizedContent.indexOf(normalizedSearch);
+      const originalIndex = this.mapNormalizedIndexToOriginal(textContent, normalizedIndex);
+      
+      if (originalIndex >= 0) {
+        const endIndex = originalIndex + searchText.length;
+        return {
+          found: true,
+          beforeText: textContent.substring(0, originalIndex),
+          matchedText: textContent.substring(originalIndex, endIndex),
+          afterText: textContent.substring(endIndex)
+        };
+      }
+    }
+    
+    return { found: false };
+  }
+
+  /**
+   * 将标准化文本中的索引映射回原始文本
+   */
+  mapNormalizedIndexToOriginal(originalText, normalizedIndex) {
+    let originalIndex = 0;
+    let normalizedCount = 0;
+    
+    for (let i = 0; i < originalText.length; i++) {
+      if (normalizedCount === normalizedIndex) {
+        return i;
+      }
+      
+      const char = originalText[i];
+      const normalizedChar = this.normalizeText(char);
+      
+      if (normalizedChar.length > 0) {
+        normalizedCount += normalizedChar.length;
+      }
+    }
+    
+    return -1;
+  }
+
+  /**
+   * 找到最佳文本匹配 (用于智能匹配)
+   */
+  findBestTextMatch(haystack, needle) {
+    const normalizedHaystack = this.normalizeText(haystack);
+    const normalizedNeedle = this.normalizeText(needle);
+    
+    // 移除标点符号后匹配
+    const cleanHaystack = normalizedHaystack.replace(/[^\w\s\u4e00-\u9fff]/g, '');
+    const cleanNeedle = normalizedNeedle.replace(/[^\w\s\u4e00-\u9fff]/g, '');
+    
+    if (cleanHaystack.includes(cleanNeedle)) {
+      const cleanIndex = cleanHaystack.indexOf(cleanNeedle);
+      
+      // 尝试在原始文本中找到对应位置
+      let originalIndex = -1;
+      let cleanCount = 0;
+      
+      for (let i = 0; i < haystack.length; i++) {
+        const char = haystack[i];
+        if (/[\w\u4e00-\u9fff]/.test(char)) {
+          if (cleanCount === cleanIndex) {
+            originalIndex = i;
+            break;
+          }
+          cleanCount++;
+        }
+      }
+      
+      if (originalIndex >= 0) {
+        // 找到匹配的实际文本
+        let matchLength = 0;
+        let charCount = 0;
+        
+        for (let i = originalIndex; i < haystack.length && charCount < cleanNeedle.length; i++) {
+          const char = haystack[i];
+          if (/[\w\u4e00-\u9fff]/.test(char)) {
+            charCount++;
+          }
+          matchLength++;
+        }
+        
+        const matchedText = haystack.substring(originalIndex, originalIndex + matchLength);
+        
+        return {
+          found: true,
+          beforeText: haystack.substring(0, originalIndex),
+          matchedText: matchedText,
+          afterText: haystack.substring(originalIndex + matchLength)
+        };
+      }
+    }
+    
+    return { found: false };
+  }
+
+  /**
    * 处理文本选择
    */
   handleTextSelection(e) {
@@ -386,8 +595,11 @@ class GlassNoteSystem {
       return;
     }
 
-    this.selectedText = selection.toString().trim();
-    console.log('📝 选中文本:', this.selectedText);
+    // 标准化选中文本，确保与恢复时的格式一致
+    const rawText = selection.toString().trim();
+    this.selectedText = this.normalizeText(rawText);
+    console.log('📝 选中文本 (原始):', rawText);
+    console.log('📝 选中文本 (标准化):', this.selectedText);
     
     if (this.selectedText.length < 1) {
       this.hideToolbar();
@@ -2151,47 +2363,76 @@ class GlassNoteSystem {
       // 应用样式
       this.applyAnnotationStyle(annotationSpan, type, color);
 
-      // 包装目标内容
+      // 包装目标内容 - 使用智能文本匹配
       const textContent = targetElement.textContent;
       console.log('🔍 检查文本包含:', { 
         targetText: textContent.substring(0, 100),
         searchText: text?.substring(0, 50),
-        includes: textContent.includes(text)
+        simpleIncludes: textContent.includes(text)
       });
       
-      if (textContent.includes(text)) {
-        const startIndex = textContent.indexOf(text);
-        const endIndex = startIndex + text.length;
-        
-        const beforeText = textContent.substring(0, startIndex);
-        const afterText = textContent.substring(endIndex);
-        
-        console.log('📝 创建标注包装:', {
-          beforeText: beforeText?.substring(0, 20),
+      // 首先尝试简单匹配
+      let matchResult = this.findTextInElement(targetElement, text);
+      
+      if (matchResult.found) {
+        console.log('📝 创建标注包装 (简单匹配):', {
+          beforeText: matchResult.beforeText?.substring(0, 20),
           targetText: text?.substring(0, 30),
-          afterText: afterText?.substring(0, 20)
+          afterText: matchResult.afterText?.substring(0, 20)
         });
         
         // 重构DOM结构
         targetElement.innerHTML = '';
-        if (beforeText) {
-          targetElement.appendChild(document.createTextNode(beforeText));
+        if (matchResult.beforeText) {
+          targetElement.appendChild(document.createTextNode(matchResult.beforeText));
         }
         
         annotationSpan.textContent = text;
         targetElement.appendChild(annotationSpan);
         
-        if (afterText) {
-          targetElement.appendChild(document.createTextNode(afterText));
+        if (matchResult.afterText) {
+          targetElement.appendChild(document.createTextNode(matchResult.afterText));
         }
         
         this.annotations.set(id, annotationData);
-        console.log('✅ 标注恢复成功:', id);
+        console.log('✅ 标注恢复成功 (简单匹配):', id);
         return true;
-      } else {
-        console.warn('❌ 目标元素不包含指定文本');
-        return false;
       }
+      
+      // 如果简单匹配失败，尝试智能匹配
+      if (this.fuzzyTextMatch(textContent, text)) {
+        console.log('🎯 使用智能匹配恢复标注');
+        
+        // 对于智能匹配，我们需要找到最佳匹配位置
+        const smartMatch = this.findBestTextMatch(textContent, text);
+        if (smartMatch.found) {
+          console.log('📝 创建标注包装 (智能匹配):', {
+            beforeText: smartMatch.beforeText?.substring(0, 20),
+            targetText: smartMatch.matchedText?.substring(0, 30),
+            afterText: smartMatch.afterText?.substring(0, 20)
+          });
+          
+          // 重构DOM结构
+          targetElement.innerHTML = '';
+          if (smartMatch.beforeText) {
+            targetElement.appendChild(document.createTextNode(smartMatch.beforeText));
+          }
+          
+          annotationSpan.textContent = smartMatch.matchedText;
+          targetElement.appendChild(annotationSpan);
+          
+          if (smartMatch.afterText) {
+            targetElement.appendChild(document.createTextNode(smartMatch.afterText));
+          }
+          
+          this.annotations.set(id, annotationData);
+          console.log('✅ 标注恢复成功 (智能匹配):', id);
+          return true;
+        }
+      }
+      
+      console.warn('❌ 目标元素不包含指定文本 (所有匹配策略都失败)');
+      return false;
     } catch (error) {
       console.error('恢复标注失败:', error);
       return false;

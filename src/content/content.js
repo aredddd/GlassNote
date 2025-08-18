@@ -1421,22 +1421,28 @@ class GlassNoteSystem {
    * 生成精确的多维度锚点信息
    */
   generatePreciseAnchor(element, selectedText, sourceInfo) {
-    // 1. 增强的DOM路径
+    // 1. HTML层级结构定位
+    const hierarchyAnchor = this.generateHierarchyAnchor(element, selectedText);
+    
+    // 2. 内容区域验证
+    const contentZone = this.identifyContentZone(element);
+    
+    // 3. 增强的DOM路径
     const domPath = this.generateEnhancedDOMPath(element);
     
-    // 2. 文本偏移信息
+    // 4. 文本偏移信息
     const textOffset = {
       startIndex: sourceInfo.selectedIndex,
       endIndex: sourceInfo.selectedIndex + selectedText.length,
       elementTextLength: sourceInfo.fullText.length
     };
     
-    // 3. 上下文信息
+    // 5. 严格的上下文信息
     const beforeText = sourceInfo.beforeText;
     const afterText = sourceInfo.afterText;
     const parentText = element.parentElement?.textContent?.substring(0, 200) || '';
     
-    // 4. 元素结构信息
+    // 6. 元素结构信息
     const elementIndex = this.getElementIndex(element);
     const tagName = element.tagName;
     const elementId = element.id || '';
@@ -1446,9 +1452,10 @@ class GlassNoteSystem {
     const parentTagName = element.parentElement?.tagName || '';
     const siblingCount = element.parentElement?.children?.length || 0;
     
-    // 5. 多重备用锚点
-    const byId = elementId ? `#${elementId}` : '';
-    const byText = this.generateTextBasedAnchor(element, selectedText, beforeText, afterText);
+    // 7. 精确的结构化锚点
+    const byHierarchy = hierarchyAnchor;
+    const byContentZone = contentZone;
+    const byText = this.generateRestrictedTextAnchor(element, selectedText, beforeText, afterText, contentZone);
     const byStructure = this.generateStructuralAnchor(element);
     
     return {
@@ -1463,10 +1470,164 @@ class GlassNoteSystem {
       classList,
       parentTagName,
       siblingCount,
-      byId,
-      byText,
-      byStructure
+      
+      // 新增精确定位信息
+      hierarchy: byHierarchy,
+      contentZone: byContentZone,
+      
+      // 更新多重锚点
+      anchors: {
+        primary: domPath,
+        byHierarchy: byHierarchy,
+        byContentZone: byContentZone,
+        byText: byText,
+        byStructure: byStructure
+      }
     };
+  }
+
+  /**
+   * 生成HTML层级结构锚点
+   */
+  generateHierarchyAnchor(element, selectedText) {
+    // 构建从根到目标元素的完整路径
+    const pathToRoot = [];
+    let current = element;
+    
+    while (current && current !== document.body) {
+      // 跳过标注相关元素
+      if (current.classList && (
+          current.classList.contains('gn-a') || 
+          current.hasAttribute('data-gn-id') ||
+          current.classList.contains('glassnote-')
+        )) {
+        current = current.parentElement;
+        continue;
+      }
+      
+      const nodeInfo = {
+        tagName: current.tagName,
+        index: this.getElementIndex(current),
+        sameTagIndex: this.getSameTagIndex(current),
+        textLength: current.textContent?.length || 0,
+        hasId: !!current.id,
+        hasClass: current.className ? current.className.split(' ').filter(c => 
+          c && !c.startsWith('gn-') && !c.startsWith('glassnote-')
+        ).length > 0 : false,
+        // 添加内容特征验证
+        contentHash: this.generateContentHash(current.textContent?.substring(0, 100) || '')
+      };
+      
+      pathToRoot.unshift(nodeInfo);
+      current = current.parentElement;
+    }
+    
+    return {
+      pathToRoot: pathToRoot,
+      targetTextLength: selectedText.length,
+      targetTextHash: this.generateContentHash(selectedText),
+      depth: pathToRoot.length
+    };
+  }
+
+  /**
+   * 识别内容区域类型
+   */
+  identifyContentZone(element) {
+    // 检查元素是否在主要内容区域
+    const contentIndicators = [
+      'editor', 'content', 'article', 'main', 'text-block', 'ace-line',
+      'zone-container', 'page-block', 'render-unit'
+    ];
+    
+    const nonContentIndicators = [
+      'header', 'nav', 'footer', 'sidebar', 'toolbar', 'menu',
+      'note-title', 'breadcrumb', 'navigation'
+    ];
+    
+    let current = element;
+    let zoneType = 'unknown';
+    let confidence = 0;
+    
+    while (current && current !== document.body) {
+      const classNames = current.className || '';
+      const tagName = current.tagName.toLowerCase();
+      
+      // 检查是否是内容区域
+      for (const indicator of contentIndicators) {
+        if (classNames.includes(indicator) || tagName === 'article' || tagName === 'main') {
+          zoneType = 'content';
+          confidence += 20;
+          break;
+        }
+      }
+      
+      // 检查是否是非内容区域
+      for (const indicator of nonContentIndicators) {
+        if (classNames.includes(indicator) || ['header', 'nav', 'footer'].includes(tagName)) {
+          zoneType = 'non-content';
+          confidence += 30;
+          break;
+        }
+      }
+      
+      current = current.parentElement;
+    }
+    
+    return {
+      type: zoneType,
+      confidence: confidence,
+      isMainContent: zoneType === 'content' && confidence > 40
+    };
+  }
+
+  /**
+   * 生成受限的文本锚点（只在内容区域内匹配）
+   */
+  generateRestrictedTextAnchor(element, selectedText, beforeText, afterText, contentZone) {
+    if (!contentZone.isMainContent) {
+      console.warn('⚠️ 标注不在主要内容区域，增加限制性匹配');
+    }
+    
+    const contextLength = 30;
+    const before = beforeText.slice(-contextLength).trim();
+    const after = afterText.slice(0, contextLength).trim();
+    
+    return {
+      text: selectedText,
+      before: before,
+      after: after,
+      signature: `${before}|${selectedText}|${after}`.replace(/\s+/g, ' '),
+      contentZoneRequired: contentZone.isMainContent,
+      restrictToContentArea: true
+    };
+  }
+
+  /**
+   * 生成内容哈希（用于验证）
+   */
+  generateContentHash(text) {
+    if (!text) return '';
+    
+    // 简单但有效的哈希函数
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // 转为32位整数
+    }
+    return hash.toString(16);
+  }
+
+  /**
+   * 获取相同标签名的索引
+   */
+  getSameTagIndex(element) {
+    if (!element.parentElement) return 0;
+    
+    const siblings = Array.from(element.parentElement.children)
+      .filter(child => child.tagName === element.tagName);
+    return siblings.indexOf(element);
   }
 
   /**
@@ -2501,13 +2662,13 @@ class GlassNoteSystem {
    */
   async restoreAnnotationEnhanced(annotationData) {
     try {
-      const { id, type, text, color, context, structure, anchors, textOffset } = annotationData;
-      console.log('🔄 尝试恢复标注 (增强模式):', { 
+      const { id, type, text, color, hierarchy, contentZone, anchors } = annotationData;
+      console.log('🔄 尝试恢复标注 (精确锚点模式):', { 
         id, 
         type, 
         text: text?.substring(0, 30),
-        hasContext: !!context,
-        hasStructure: !!structure,
+        hasHierarchy: !!hierarchy,
+        hasContentZone: !!contentZone,
         hasAnchors: !!anchors
       });
 
@@ -2521,59 +2682,76 @@ class GlassNoteSystem {
 
       let targetElement = null;
       let confidence = 0;
+      let method = '';
 
-      // 策略1: 上下文验证的DOM路径定位
-      if (annotationData.domPath && context) {
-        try {
-          const candidate = document.querySelector(annotationData.domPath);
-          if (candidate) {
-            const score = this.validateElementContext(candidate, context, textOffset);
-            if (score > 70) {
-              targetElement = candidate;
-              confidence = score;
-              console.log('✅ DOM路径+上下文验证成功:', score);
-            }
-          }
-        } catch (error) {
-          console.log('⚠️ DOM路径定位失败:', error.message);
+      // 策略1: HTML层级结构定位（最高优先级）
+      if (hierarchy) {
+        const hierarchyResult = this.findByHierarchyAnchor(hierarchy, text);
+        if (hierarchyResult.element) {
+          targetElement = hierarchyResult.element;
+          confidence = hierarchyResult.confidence;
+          method = 'hierarchy';
+          console.log('✅ HTML层级结构定位成功:', confidence);
         }
       }
 
-      // 策略2: 结构化锚点定位
+      // 策略2: 内容区域限制的文本定位
+      if (!targetElement && contentZone && anchors?.byText) {
+        const restrictedTextResult = this.findByRestrictedTextAnchor(anchors.byText, contentZone);
+        if (restrictedTextResult.element) {
+          targetElement = restrictedTextResult.element;
+          confidence = restrictedTextResult.confidence;
+          method = 'restricted-text';
+          console.log('✅ 内容区域限制文本定位成功:', confidence);
+        }
+      }
+
+      // 策略3: 增强上下文验证的DOM路径
+      if (!targetElement && annotationData.domPath && annotationData.context) {
+        const contextResult = this.findByEnhancedContext(annotationData);
+        if (contextResult.element) {
+          targetElement = contextResult.element;
+          confidence = contextResult.confidence;
+          method = 'enhanced-context';
+          console.log('✅ 增强上下文DOM路径定位成功:', confidence);
+        }
+      }
+
+      // 策略4: 结构化锚点定位
       if (!targetElement && anchors?.byStructure) {
         const structuralResult = this.findByStructuralAnchor(anchors.byStructure);
         if (structuralResult.element) {
           targetElement = structuralResult.element;
-          confidence = 80;
+          confidence = 65;
+          method = 'structural';
           console.log('✅ 结构化锚点定位成功');
         }
       }
 
-      // 策略3: 文本签名定位
-      if (!targetElement && anchors?.byText) {
-        const textResult = this.findByTextSignature(anchors.byText);
-        if (textResult.element) {
-          targetElement = textResult.element;
-          confidence = 70;
-          console.log('✅ 文本签名定位成功');
-        }
-      }
-
-      // 策略4: 传统DOM路径（无上下文验证）
+      // 最后备用：传统DOM路径（最低优先级）
       if (!targetElement && annotationData.domPath) {
         try {
           targetElement = document.querySelector(annotationData.domPath);
           if (targetElement) {
-            confidence = 60;
-            console.log('✅ 传统DOM路径定位成功');
+            // 验证是否在正确的内容区域
+            const currentZone = this.identifyContentZone(targetElement);
+            if (contentZone?.isMainContent && !currentZone.isMainContent) {
+              console.warn('⚠️ DOM路径定位到非内容区域，置信度降低');
+              confidence = 40;
+            } else {
+              confidence = 55;
+            }
+            method = 'legacy-dom';
+            console.log('✅ 传统DOM路径定位成功（已验证内容区域）');
           }
         } catch (error) {
           console.log('⚠️ 传统DOM路径失败:', error.message);
         }
       }
 
-      if (!targetElement) {
-        console.warn('❌ 增强模式定位失败:', id);
+      // 最低置信度阈值检查
+      if (!targetElement || confidence < 50) {
+        console.warn('❌ 精确锚点模式定位失败或置信度过低:', id, '置信度:', confidence);
         return false;
       }
 
@@ -2586,13 +2764,190 @@ class GlassNoteSystem {
 
       if (success) {
         this.annotations.set(id, annotationData);
-        console.log(`✅ 增强标注恢复成功 (置信度: ${confidence}):`, id);
+        console.log(`✅ 精确标注恢复成功 (${method}, 置信度: ${confidence}):`, id);
       }
 
       return success;
     } catch (error) {
-      console.error('增强标注恢复失败:', error);
+      console.error('精确标注恢复失败:', error);
       return false;
+    }
+  }
+
+  /**
+   * 通过HTML层级结构定位元素
+   */
+  findByHierarchyAnchor(hierarchy, targetText) {
+    if (!hierarchy || !hierarchy.pathToRoot) {
+      return { element: null, confidence: 0 };
+    }
+
+    console.log('🔍 开始HTML层级结构匹配，深度:', hierarchy.depth);
+
+    // 从最深层开始匹配
+    let candidates = [document.body];
+    
+    for (let i = 0; i < hierarchy.pathToRoot.length; i++) {
+      const layerInfo = hierarchy.pathToRoot[i];
+      const nextCandidates = [];
+      
+      for (const parent of candidates) {
+        const children = Array.from(parent.children).filter(child => 
+          child.tagName === layerInfo.tagName
+        );
+        
+        for (const child of children) {
+          let score = 0;
+          
+          // 验证索引位置
+          if (this.getElementIndex(child) === layerInfo.index) score += 30;
+          if (this.getSameTagIndex(child) === layerInfo.sameTagIndex) score += 25;
+          
+          // 验证文本长度相似性
+          const textLength = child.textContent?.length || 0;
+          const lengthSimilarity = 1 - Math.abs(textLength - layerInfo.textLength) / 
+            Math.max(textLength, layerInfo.textLength, 1);
+          if (lengthSimilarity > 0.7) score += 20;
+          
+          // 验证内容哈希
+          const currentHash = this.generateContentHash(child.textContent?.substring(0, 100) || '');
+          if (currentHash === layerInfo.contentHash && currentHash !== '') score += 25;
+          
+          if (score > 50) { // 只保留高分候选
+            nextCandidates.push({ element: child, score: score });
+          }
+        }
+      }
+      
+      if (nextCandidates.length === 0) {
+        console.log('⚠️ 层级匹配在第', i, '层失败');
+        break;
+      }
+      
+      // 按分数排序，保留最好的候选
+      nextCandidates.sort((a, b) => b.score - a.score);
+      candidates = nextCandidates.slice(0, 3).map(c => c.element); // 保留前3个
+    }
+
+    // 在最终候选中找到包含目标文本的元素
+    for (const candidate of candidates) {
+      if (candidate.textContent && candidate.textContent.includes(targetText)) {
+        // 验证目标文本哈希
+        const textHash = this.generateContentHash(targetText);
+        if (textHash === hierarchy.targetTextHash) {
+          console.log('✅ 层级结构+文本哈希完全匹配');
+          return { element: candidate, confidence: 95 };
+        } else {
+          console.log('✅ 层级结构匹配，文本哈希不匹配');
+          return { element: candidate, confidence: 80 };
+        }
+      }
+    }
+
+    return { element: null, confidence: 0 };
+  }
+
+  /**
+   * 通过受限文本锚点定位（仅在内容区域）
+   */
+  findByRestrictedTextAnchor(textAnchor, contentZone) {
+    if (!textAnchor || !textAnchor.restrictToContentArea) {
+      return { element: null, confidence: 0 };
+    }
+
+    console.log('🔍 开始受限文本锚点匹配（仅内容区域）');
+
+    const { before, text, after } = textAnchor;
+    
+    // 在页面中搜索匹配的文本模式，但只在内容区域
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      node => {
+        const element = node.parentElement;
+        if (!this.isContentElement(element)) return NodeFilter.FILTER_REJECT;
+        
+        // 检查是否在内容区域
+        const zone = this.identifyContentZone(element);
+        if (contentZone.isMainContent && !zone.isMainContent) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        
+        return NodeFilter.FILTER_ACCEPT;
+      },
+      false
+    );
+
+    let node;
+    while (node = walker.nextNode()) {
+      const nodeText = node.textContent;
+      
+      // 检查是否包含核心文本
+      if (nodeText.includes(text)) {
+        // 验证前后文本（如果存在）
+        let matches = true;
+        if (before && !nodeText.includes(before.slice(-15))) {
+          matches = false;
+        }
+        if (after && !nodeText.includes(after.slice(0, 15))) {
+          matches = false;
+        }
+        
+        if (matches) {
+          const element = node.parentElement;
+          const zone = this.identifyContentZone(element);
+          const confidence = zone.isMainContent ? 85 : 65;
+          
+          console.log('✅ 受限文本锚点匹配成功，内容区域:', zone.isMainContent);
+          return { element: element, confidence: confidence };
+        }
+      }
+    }
+
+    return { element: null, confidence: 0 };
+  }
+
+  /**
+   * 通过增强上下文定位
+   */
+  findByEnhancedContext(annotationData) {
+    const { domPath, context, textOffset, contentZone } = annotationData;
+    
+    try {
+      const candidate = document.querySelector(domPath);
+      if (!candidate) return { element: null, confidence: 0 };
+      
+      // 基础上下文验证
+      let score = this.validateElementContext(candidate, context, textOffset);
+      
+      // 内容区域验证
+      if (contentZone) {
+        const currentZone = this.identifyContentZone(candidate);
+        if (contentZone.isMainContent === currentZone.isMainContent) {
+          score += 10;
+        } else if (contentZone.isMainContent && !currentZone.isMainContent) {
+          score -= 30; // 严重扣分：应该在内容区域但不在
+        }
+      }
+      
+      // 文本包含验证
+      if (candidate.textContent && annotationData.text) {
+        if (candidate.textContent.includes(annotationData.text)) {
+          score += 15;
+        } else if (this.fuzzyTextMatch(candidate.textContent, annotationData.text)) {
+          score += 8;
+        } else {
+          score -= 20; // 不包含目标文本
+        }
+      }
+      
+      console.log('🔍 增强上下文验证得分:', score);
+      
+      return score > 70 ? { element: candidate, confidence: score } : { element: null, confidence: 0 };
+      
+    } catch (error) {
+      console.log('⚠️ 增强上下文定位失败:', error.message);
+      return { element: null, confidence: 0 };
     }
   }
 
@@ -2677,7 +3032,7 @@ class GlassNoteSystem {
   }
 
   /**
-   * 通过文本签名查找元素
+   * 通过文本签名查找元素（增强版 - 限制内容区域）
    */
   findByTextSignature(textAnchor) {
     // 检查扩展上下文
@@ -2690,14 +3045,37 @@ class GlassNoteSystem {
       return { element: null };
     }
 
-    const { before, text, after } = textAnchor;
+    const { before, text, after, restrictToContentArea } = textAnchor;
     
     try {
+      console.log('🔍 文本签名查找:', { 
+        text: text?.substring(0, 20), 
+        restrictToContentArea: restrictToContentArea 
+      });
+
       // 在页面中搜索匹配的文本模式
       const walker = document.createTreeWalker(
         document.body,
         NodeFilter.SHOW_TEXT,
-        node => this.isContentElement(node.parentElement) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+        node => {
+          const element = node.parentElement;
+          if (!this.isContentElement(element)) return NodeFilter.FILTER_REJECT;
+          
+          // 如果启用了内容区域限制，则进行额外验证
+          if (restrictToContentArea) {
+            const zone = this.identifyContentZone(element);
+            if (!zone.isMainContent) {
+              console.log('🚫 文本签名：跳过非内容区域', {
+                tagName: element.tagName,
+                className: element.className || '(无)',
+                zoneType: zone.type
+              });
+              return NodeFilter.FILTER_REJECT;
+            }
+          }
+          
+          return NodeFilter.FILTER_ACCEPT;
+        },
         false
       );
 
@@ -2717,7 +3095,17 @@ class GlassNoteSystem {
           }
           
           if (matches) {
-            return { element: node.parentElement };
+            const element = node.parentElement;
+            const zone = this.identifyContentZone(element);
+            
+            console.log('✅ 文本签名匹配成功:', {
+              tagName: element.tagName,
+              className: element.className || '(无)',
+              isMainContent: zone.isMainContent,
+              textPreview: nodeText.substring(0, 50)
+            });
+            
+            return { element: element };
           }
         }
       }
@@ -2725,6 +3113,7 @@ class GlassNoteSystem {
       console.log('⚠️ 文本签名查找失败:', error.message);
     }
 
+    console.log('❌ 文本签名未找到匹配');
     return { element: null };
   }
 

@@ -5,7 +5,8 @@
   "description": "基于图层覆盖技术的网页标注浏览器插件，支持非侵入式文本标注和便利贴记录",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "scripting"
   ],
   "content_scripts": [
     {

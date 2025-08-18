@@ -34,14 +34,14 @@ class GlassNotePopup {
   /**
    * 安全发送消息到content script
    */
-  async sendMessageSafely(message) {
+  async sendMessageSafely(message, retries = 1) {
     if (!this.currentTab) {
       console.warn('没有活动标签页');
       return false;
     }
 
     // 检查URL是否支持content script
-    const unsupportedProtocols = ['chrome:', 'chrome-extension:', 'moz-extension:', 'edge:', 'about:'];
+    const unsupportedProtocols = ['chrome:', 'chrome-extension:', 'moz-extension:', 'edge:', 'about:', 'file:'];
     const url = this.currentTab.url || '';
     
     if (unsupportedProtocols.some(protocol => url.startsWith(protocol))) {
@@ -49,19 +49,63 @@ class GlassNotePopup {
       return false;
     }
 
+    // 检查标签页状态
+    if (this.currentTab.status !== 'complete') {
+      this.showToast('页面还在加载中，请稍后再试');
+      return false;
+    }
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        await chrome.tabs.sendMessage(this.currentTab.id, message);
+        return true;
+      } catch (error) {
+        console.error(`发送消息失败 (尝试 ${attempt + 1}/${retries + 1}):`, error);
+        
+        // 如果是最后一次尝试，显示错误信息
+        if (attempt === retries) {
+          if (error.message.includes('Could not establish connection') || 
+              error.message.includes('Receiving end does not exist')) {
+            
+            // 尝试注入content script
+            const injected = await this.tryInjectContentScript();
+            if (injected) {
+              this.showToast('正在初始化标注系统，请稍后再试');
+            } else {
+              this.showToast('页面不支持标注功能或需要刷新页面');
+            }
+          } else {
+            this.showToast('操作失败，请重试');
+          }
+          return false;
+        }
+        
+        // 等待一段时间后重试
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * 尝试注入content script
+   */
+  async tryInjectContentScript() {
     try {
-      await chrome.tabs.sendMessage(this.currentTab.id, message);
+      await chrome.scripting.executeScript({
+        target: { tabId: this.currentTab.id },
+        files: ['src/content/content.js']
+      });
+      
+      await chrome.scripting.insertCSS({
+        target: { tabId: this.currentTab.id },
+        files: ['styles/content.css']
+      });
+      
       return true;
     } catch (error) {
-      console.error('发送消息失败:', error);
-      
-      // 检查是否是连接错误
-      if (error.message.includes('Could not establish connection') || 
-          error.message.includes('Receiving end does not exist')) {
-        this.showToast('页面还未完全加载，请稍后再试');
-      } else {
-        this.showToast('操作失败，请重试');
-      }
+      console.error('注入content script失败:', error);
       return false;
     }
   }
@@ -201,16 +245,17 @@ class GlassNotePopup {
       let noteCount = 0;
       let totalCount = 0;
 
-      if (pageData && pageData.elements) {
-        pageData.elements.forEach(element => {
-          if (element.type === 'note') {
-            noteCount++;
-          } else {
-            highlightCount++;
-          }
-          totalCount++;
-        });
-      }
+      // 支持新旧数据格式
+      const annotations = pageData?.annotations || pageData?.elements || [];
+      
+      annotations.forEach(element => {
+        if (element.type === 'note') {
+          noteCount++;
+        } else {
+          highlightCount++;
+        }
+        totalCount++;
+      });
 
       // 更新显示
       document.getElementById('highlightCount').textContent = highlightCount;
@@ -219,6 +264,10 @@ class GlassNotePopup {
 
     } catch (error) {
       console.error('加载统计数据失败:', error);
+      // 出错时显示0
+      document.getElementById('highlightCount').textContent = '0';
+      document.getElementById('noteCount').textContent = '0';
+      document.getElementById('totalCount').textContent = '0';
     }
   }
 
@@ -244,18 +293,28 @@ class GlassNotePopup {
       // 获取所有存储的数据
       const allData = await chrome.storage.local.get(null);
       
-      // 过滤出页面数据
+      // 过滤出页面数据并确保数据格式一致
       const pageData = {};
       Object.keys(allData).forEach(key => {
         if (key.startsWith('http')) {
-          pageData[key] = allData[key];
+          const data = allData[key];
+          // 统一数据格式：如果有elements字段，转换为annotations
+          if (data.elements && !data.annotations) {
+            data.annotations = data.elements;
+            delete data.elements;
+          }
+          pageData[key] = data;
         }
       });
 
       // 创建导出数据
       const exportData = {
-        version: '1.0.0',
+        version: '2.0.0',
         exportTime: new Date().toISOString(),
+        architecture: 'DOM内联标注系统',
+        totalPages: Object.keys(pageData).length,
+        totalAnnotations: Object.values(pageData).reduce((total, page) => 
+          total + (page.annotations ? page.annotations.length : 0), 0),
         data: pageData
       };
 
@@ -267,12 +326,12 @@ class GlassNotePopup {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `glassnote-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `glassnote-v2-export-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       
       URL.revokeObjectURL(url);
       
-      this.showToast('数据导出成功');
+      this.showToast(`已导出 ${exportData.totalPages} 个页面的标注数据`);
     } catch (error) {
       console.error('导出数据失败:', error);
       this.showToast('导出失败，请重试');

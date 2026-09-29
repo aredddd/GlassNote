@@ -33,6 +33,9 @@
     getPage: (url) => call('getPage', { url }),
     listPages: () => call('listPages'),
     upsert: (url, title, annotation) => call('upsert', { url, title, annotation }),
+    toggleMark: (url, title, annotation, matchingIds = [], colorAction = false) =>
+      call('toggleMark', { url, title, annotation, matchingIds, colorAction }),
+    updateNote: (url, id, patch) => call('updateNote', { url, id, patch }),
     remove: (url, id) => call('remove', { url, id }),
     clearPage: (url) => call('clearPage', { url }),
     getSettings: () => call('getSettings'),

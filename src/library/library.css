@@ -28,14 +28,6 @@ body {
   padding: 0 4px;
   white-space: nowrap;
 }
-.brand small {
-  display: block;
-  font-size: 9px;
-  font-weight: 400;
-  letter-spacing: 0.13em;
-  color: var(--muted);
-  margin-top: 3px;
-}
 .brand-mark {
   width: 40px;
   height: 44px;
@@ -85,6 +77,9 @@ body {
 .active .nav-count {
   color: #426c4d;
 }
+.main-nav {
+  margin-top: 28px;
+}
 .pages-label {
   display: flex;
   justify-content: space-between;
@@ -133,36 +128,8 @@ body {
   margin-left: auto;
   color: #9ca99a;
 }
-.sidebar-empty {
-  font-size: 10px;
-  color: #9aa595;
-  line-height: 1.9;
-  padding: 0 12px;
-}
 .sidebar-bottom {
   padding-top: 22px;
-}
-.local-info {
-  display: flex;
-  gap: 8px;
-  font-size: 10px;
-  color: #6b806b;
-  padding: 15px 11px 20px;
-  align-items: flex-start;
-}
-.local-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #83a878;
-  margin-top: 6px;
-  flex-shrink: 0;
-}
-.local-info small {
-  display: block;
-  font-size: 9px;
-  color: #98a28f;
-  margin-top: 5px;
 }
 .sidebar-bottom .nav-item {
   padding: 10px 12px;
@@ -174,7 +141,7 @@ body {
   color: #9aa694;
 }
 .main {
-  padding: 43px 42px 0;
+  padding: 32px 42px 24px;
   min-width: 0;
   max-width: 1700px;
   width: 100%;
@@ -186,32 +153,16 @@ body {
   justify-content: space-between;
   gap: 20px;
 }
-.eyebrow {
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  color: #8a9986;
-}
 .main-header h1 {
   font-family: var(--serif);
   font-size: 33px;
   line-height: 1.25;
   font-weight: 500;
-  margin: 8px 0 10px;
+  margin: 0;
   letter-spacing: -0.04em;
   max-width: 650px;
 }
-.title-dot {
-  color: #87aa7c;
-  margin-left: 4px;
-}
-.main-header p {
-  font-size: 11px;
-  color: var(--muted);
-  margin: 0;
-  letter-spacing: 0.015em;
-}
 .main-header .button {
-  margin-top: 12px;
   font-size: 11px;
   padding: 10px 15px;
   background: #fff7;
@@ -260,7 +211,7 @@ body {
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
   min-height: 540px;
-  height: calc(100vh - 265px);
+  height: calc(100vh - 176px);
   max-height: 1100px;
   overflow: hidden;
 }
@@ -428,19 +379,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.list-footer {
-  padding: 13px 23px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid var(--line);
-  color: #a4ad9e;
-  font-size: 9px;
-}
-.list-footer svg {
-  width: 13px;
-  height: 13px;
-}
 .list-loading,
 .list-empty {
   padding: 55px 18px;
@@ -454,17 +392,6 @@ body {
   height: 30px;
   margin: 0 auto 14px;
   color: #a8b6a0;
-}
-.list-empty h3 {
-  font-size: 13px;
-  font-weight: 500;
-  color: #68805f;
-  margin-bottom: 6px;
-}
-.list-empty p {
-  font-size: 10px;
-  line-height: 1.9;
-  margin: 0 0 15px;
 }
 .list-empty .button {
   font-size: 10px;
@@ -489,7 +416,7 @@ body {
   position: relative;
   width: 180px;
   height: 170px;
-  margin-bottom: 27px;
+  margin-bottom: 0;
 }
 .art-paper {
   width: 92px;
@@ -544,38 +471,6 @@ body {
   bottom: 15px;
   color: #b6c79f;
   font-size: 19px;
-}
-.empty-eyebrow {
-  font-size: 9px;
-  letter-spacing: 0.15em;
-  color: #9ba98f;
-}
-.detail-empty h2 {
-  font-family: var(--serif);
-  font-size: 24px;
-  font-weight: 500;
-  color: #536b49;
-  margin: 14px 0;
-}
-.detail-empty p {
-  font-size: 11px;
-  line-height: 2.05;
-  margin: 0;
-  color: #96a18e;
-}
-.empty-hint {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border-top: 1px solid var(--line);
-  padding-top: 20px;
-  margin-top: 27px;
-  font-size: 9px;
-  color: #9ca88f;
-}
-.empty-hint svg {
-  width: 14px;
-  height: 14px;
 }
 .note-detail {
   display: flex;
@@ -684,15 +579,10 @@ body {
   font-family: var(--serif);
   font-size: 17px;
   line-height: 1.95;
-  margin: 0 0 15px;
+  margin: 0;
   color: #48533b;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-.quote-caption {
-  font-size: 8px;
-  letter-spacing: 0.08em;
-  color: #a9ac94;
 }
 .note-editor {
   margin-top: 29px;
@@ -795,14 +685,6 @@ body {
   line-height: 1.8;
   margin-top: 20px;
 }
-.main-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 17px 1px 20px;
-  font-size: 9px;
-  color: #a2ad99;
-}
 .error-banner {
   border: 1px solid #e7c7be;
   background: #fff2ed;
@@ -863,11 +745,6 @@ dialog form {
 .setting-row label {
   font-size: 12px;
   font-weight: 500;
-}
-.setting-row p {
-  font-size: 10px;
-  color: var(--muted);
-  margin: 6px 0 0;
 }
 .setting-row select {
   padding: 7px;
@@ -956,15 +833,12 @@ dialog form {
     width: 34px;
     height: 39px;
   }
-  .brand small {
-    font-size: 8px;
-  }
   .main {
-    padding: 32px 25px 0;
+    padding: 32px 25px 24px;
   }
   .workspace {
     grid-template-columns: 300px minmax(0, 1fr);
-    height: calc(100vh - 243px);
+    height: calc(100vh - 176px);
   }
   .detail-body {
     padding: 25px;
@@ -1004,9 +878,6 @@ dialog form {
   .card-quote {
     font-size: 13px;
   }
-  .detail-footer span:last-child {
-    display: none;
-  }
 }
 @media (max-width: 940px) {
   .app-shell {
@@ -1023,9 +894,6 @@ dialog form {
     width: 29px;
     height: 35px;
   }
-  .brand small {
-    font-size: 7px;
-  }
   .brand-mark svg {
     width: 24px;
     height: 24px;
@@ -1041,15 +909,8 @@ dialog form {
   .page-item {
     padding-left: 9px;
   }
-  .local-info {
-    padding-left: 8px;
-    font-size: 9px;
-  }
-  .local-info small {
-    font-size: 8px;
-  }
   .main {
-    padding: 29px 18px 0;
+    padding: 29px 18px 24px;
   }
   .workspace {
     grid-template-columns: 265px minmax(0, 1fr);
@@ -1066,17 +927,11 @@ dialog form {
   .quote-section blockquote {
     font-size: 14px;
   }
-  .overview-caption {
-    display: none !important;
-  }
   .overview {
     margin-top: 22px;
   }
   .main-header h1 {
     font-size: 30px;
-  }
-  .main-header p {
-    font-size: 10px;
   }
   .main-header .button {
     font-size: 10px;
@@ -1130,15 +985,12 @@ dialog form {
     width: 33px;
     height: 37px;
   }
-  .brand small {
-    font-size: 8px;
-  }
   .sidebar-section-label,
-  .page-nav,
-  .local-info {
+  .page-nav {
     display: none;
   }
   .main-nav {
+    margin-top: 0;
     grid-row: 2;
     grid-column: 1/-1;
     display: flex;
@@ -1170,16 +1022,13 @@ dialog form {
     display: none;
   }
   .main {
-    padding: 25px 18px 0;
+    padding: 25px 18px 18px;
   }
   .main-header {
     align-items: center;
   }
   .main-header h1 {
     font-size: 29px;
-  }
-  .main-header .eyebrow {
-    font-size: 9px;
   }
   .overview {
     margin: 22px 0;
@@ -1191,7 +1040,7 @@ dialog form {
   .workspace {
     display: block;
     min-height: 460px;
-    height: calc(100vh - 377px);
+    height: calc(100vh - 278px);
     max-height: none;
   }
   .list-pane {
@@ -1264,15 +1113,9 @@ dialog form {
   .source-separator {
     display: initial;
   }
-  .main-footer {
-    font-size: 8px;
-  }
   .empty-art {
     transform: scale(0.8);
     margin-bottom: 0;
-  }
-  .detail-empty h2 {
-    font-size: 21px;
   }
   .note-editor textarea {
     font-size: 13px;
@@ -1295,9 +1138,6 @@ dialog form {
   .main-nav svg {
     width: 14px;
     height: 14px;
-  }
-  .main-header p {
-    max-width: 215px;
   }
   .main-header .button {
     font-size: 9px;
@@ -1326,7 +1166,6 @@ dialog form {
     gap: 7px;
   }
 }
-
 .delete-preview {
   font-family: var(--serif);
   font-size: 14px;

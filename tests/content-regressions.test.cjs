@@ -36,6 +36,10 @@ async function contentPage(run) {
         upsert: async (url, title, annotation) => {
           window.__upserts.push({ url, title, annotation });
         },
+        toggleMark: async (url, title, annotation) => {
+          window.__upserts.push({ url, title, annotation });
+          return { action: 'added' };
+        },
       };
     });
     await page.addScriptTag({ path: path.join(__dirname, '../src/shared/anchor.js') });

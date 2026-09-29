@@ -131,7 +131,6 @@
     $('pageCount').textContent = state.pages.length;
     $('statAnnotations').textContent = items.length;
     $('statPages').textContent = state.pages.length;
-    $('storageStatus').textContent = '已从本地存储读取';
     document.querySelectorAll('[data-view]').forEach((button) => {
       const active = !state.pageUrl && state.view === button.dataset.view;
       button.classList.toggle('active', active);
@@ -140,8 +139,6 @@
     const nav = $('pageNav');
     const scrollTop = nav.scrollTop;
     nav.replaceChildren();
-    if (!state.pages.length)
-      nav.append(textElement('p', 'sidebar-empty', '读过的页面，会在这里相遇。'));
     state.pages.forEach((page) => {
       const button = textElement(
         'button',
@@ -166,20 +163,8 @@
     });
     nav.scrollTop = scrollTop;
     const selectedPage = state.pages.find((page) => page.url === state.pageUrl);
-    $('viewTitle').replaceChildren(
-      document.createTextNode(
-        selectedPage?.title ||
-          { all: '全部笔记', marks: '文字标注', notes: '我的想法' }[state.view],
-      ),
-      textElement('span', 'title-dot', '.'),
-    );
-    $('viewSubtitle').textContent = selectedPage
-      ? `${domainOf(selectedPage.url)} · 这篇阅读留下的点滴`
-      : {
-          all: '那些打动你的文字，和你当时的想法。',
-          marks: '把值得重读的文字，轻轻标记下来。',
-          notes: '从别人的文字，生长出自己的思考。',
-        }[state.view];
+    $('viewTitle').textContent =
+      selectedPage?.title || { all: '全部笔记', marks: '文字标注', notes: '我的想法' }[state.view];
     $('viewTitle').title = selectedPage?.title || '';
   }
   function renderList(items) {
@@ -187,9 +172,6 @@
     const scrollTop = holder.scrollTop;
     holder.replaceChildren();
     $('resultCount').textContent = `${items.length} 条记录`;
-    $('listFooter').textContent = items.length
-      ? '按页面收藏，随时回到原文'
-      : '每一条想法，都有迹可循';
     if (!items.length) {
       const empty = textElement('div', 'list-empty');
       const filtered = !!(
@@ -198,17 +180,7 @@
         state.pageUrl ||
         state.view !== 'all'
       );
-      empty.append(
-        icon(filtered ? 'search' : 'book'),
-        textElement('h3', '', filtered ? '暂时没有找到这条灵光' : '你的阅读故事，从这里开始'),
-        textElement(
-          'p',
-          '',
-          filtered
-            ? '试试其他关键词，或放宽筛选条件。'
-            : '打开你喜欢的文章，选中文字，就能留下第一条记录。',
-        ),
-      );
+      empty.append(icon(filtered ? 'search' : 'book'));
       if (filtered) {
         const reset = textElement('button', 'button secondary', '清除筛选');
         reset.addEventListener('click', resetFilters);
@@ -293,6 +265,8 @@
   }
   async function refresh() {
     const version = ++refreshVersion;
+    $('storageStatus').textContent = '正在读取本地笔记';
+    document.querySelector('.overview-caption').hidden = false;
     try {
       const pages = await GNStore.listPages();
       if (version !== refreshVersion) return;
@@ -311,11 +285,13 @@
         params.delete('note');
       }
       $('errorBanner').hidden = true;
+      document.querySelector('.overview-caption').hidden = true;
       render();
     } catch (error) {
       $('errorMessage').textContent = `暂时无法读取笔记：${error.message || '请重试'}`;
       $('errorBanner').hidden = false;
       $('storageStatus').textContent = '本地读取失败';
+      document.querySelector('.overview-caption').hidden = false;
       $('resultCount').textContent = '读取失败';
       if (!state.pages.length)
         $('noteList').replaceChildren(
@@ -349,14 +325,9 @@
     });
     setDirty();
     try {
-      const latest = await GNStore.getPage(page.url);
-      const current = latest?.annotations.find((item) => item.id === annotation.id);
-      if (!current) throw new Error('这条笔记已在其他页面删除。请先复制未保存的想法，再重新读取。');
-      await GNStore.upsert(page.url, latest.title, {
-        ...current,
+      await GNStore.updateNote(page.url, annotation.id, {
         content,
-        color,
-        updatedAt: new Date().toISOString(),
+        ...(color !== annotation.color ? { color } : {}),
       });
       state.dirty = false;
       await refresh();

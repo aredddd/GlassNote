@@ -111,10 +111,6 @@ p {
   font-weight: 600;
   letter-spacing: -0.035em;
 }
-.brand small {
-  font-family: var(--font);
-  letter-spacing: 0.05em;
-}
 .brand-mark {
   display: grid;
   place-items: center;

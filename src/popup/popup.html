@@ -21,7 +21,7 @@
               <path d="M9 6h13a3 3 0 0 1 3 3v17H12a5 5 0 0 1-5-5V8a2 2 0 0 1 2-2Z" />
               <path d="M12 6v20M16 12h5M16 16h5M16 20h3" /></svg
           ></span>
-          <span>GlassNote<small>留住阅读的灵光</small></span>
+          <span>GlassNote</span>
         </a>
         <button class="icon-button" id="settingsBtn" aria-label="设置" title="设置">
           <svg viewBox="0 0 24 24">
@@ -34,11 +34,11 @@
         </button>
       </header>
       <section class="page-card glass" aria-labelledby="pageTitle">
-        <div class="eyebrow">
+        <div class="page-meta">
           <span class="live-dot" id="pageDot"></span><span id="pageDomain">正在读取当前页面</span
           ><span class="page-label">当前页面</span>
         </div>
-        <h1 id="pageTitle">让每一次阅读都有迹可循</h1>
+        <h1 id="pageTitle"></h1>
         <div class="page-status">
           <span id="pageStatus">正在读取已保存的笔记…</span
           ><svg aria-hidden="true" viewBox="0 0 24 24">
@@ -49,8 +49,7 @@
       </section>
       <div class="enable-row">
         <div>
-          <span class="row-title">网页标注</span
-          ><span class="row-description" id="enableDescription">选中文字，记下所想</span>
+          <span class="row-title">网页标注</span>
         </div>
         <label class="switch"
           ><input id="enableToggle" type="checkbox" checked aria-label="启用网页标注" /><span></span
@@ -88,15 +87,9 @@
         <button id="libraryBtn" class="library-link">
           <span class="library-icon"
             ><svg viewBox="0 0 24 24"><path d="M4 4h4v16H4zM11 4h4v16h-4zM18 4l3 15" /></svg></span
-          ><span>打开笔记库<small>把零散的灵光，收进一处</small></span
+          ><span>打开笔记库</span
           ><svg class="footer-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
         </button>
-        <div class="local-caption">
-          <svg viewBox="0 0 24 24">
-            <path d="M6 10V7a6 6 0 0 1 12 0v3M4 10h16v11H4z" />
-            <path d="M12 14v3" /></svg
-          >笔记保存在此浏览器 · 可导出备份
-        </div>
       </footer>
     </main>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

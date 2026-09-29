@@ -81,6 +81,27 @@ async function setup(run, settings = {}) {
         },
       };
     }, settings);
+    await page.addScriptTag({ path: path.join(__dirname, '../src/shared/model.js') });
+    await page.addScriptTag({ path: path.join(__dirname, '../src/background/repository.js') });
+    await page.evaluate(() => {
+      const repository = GNRepository.createRepository({
+        async get(key) {
+          const pages = Object.fromEntries(
+            Object.entries(testDB.pages).map(([url, value]) => [`gn:page:${url}`, value]),
+          );
+          return structuredClone(key === null ? pages : { [key]: pages[key] });
+        },
+        async set(values) {
+          if (testDB.failSave) throw new Error('测试存储已满');
+          for (const [key, value] of Object.entries(values))
+            testDB.pages[key.slice('gn:page:'.length)] = structuredClone(value);
+        },
+      });
+      GNStore.toggleMark = (url, title, annotation, matchingIds, colorAction) =>
+        repository.dispatch('toggleMark', { url, title, annotation, matchingIds, colorAction });
+      GNStore.updateNote = (url, id, patch) =>
+        repository.dispatch('updateNote', { url, id, patch });
+    });
     await page.addStyleTag({ path: path.join(__dirname, '../styles/content.css') });
     await page.addScriptTag({ path: path.join(__dirname, '../src/content/content.js') });
     await page.evaluate(() => __glassNoteV3.ready);
@@ -150,6 +171,136 @@ test('保存失败明确显示错误并保留原样草稿，重试成功后才�
     );
     assert.equal(await page.locator('.note-content').innerText(), draft);
     assert.equal(await page.locator('#glassnote-root img').count(), 0);
+  });
+});
+
+test('取消标注失败时保留选区、格式和按钮状态，成功重试后才取消', async () => {
+  await setup(async (page) => {
+    await select(page);
+    const highlight = page.getByRole('button', { name: '高亮', exact: true });
+    await highlight.click();
+    await page.waitForFunction(
+      () => !__glassNoteV3.savingSelection && __glassNoteV3.annotations.length === 1,
+    );
+    assert.equal(await highlight.getAttribute('aria-pressed'), 'true');
+    await page.evaluate(() => {
+      testDB.failSave = true;
+    });
+    await highlight.click();
+    await page.waitForFunction(
+      () =>
+        !__glassNoteV3.savingSelection && __glassNoteV3.toast.textContent.includes('测试存储已满'),
+    );
+    assert.equal(await highlight.getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.evaluate(() => testDB.pages[location.href].annotations.length), 1);
+    assert.equal(
+      await page.evaluate(() => CSS.highlights.get('glassnote-highlight-yellow').size),
+      1,
+    );
+    assert.equal(await page.evaluate(() => getSelection().isCollapsed), false);
+    await page.evaluate(() => {
+      testDB.failSave = false;
+    });
+    await highlight.click();
+    await page.waitForFunction(
+      () => !__glassNoteV3.savingSelection && __glassNoteV3.annotations.length === 0,
+    );
+    assert.equal(await highlight.getAttribute('aria-pressed'), 'false');
+    assert.equal(
+      await page.evaluate(() => CSS.highlights.has('glassnote-highlight-yellow')),
+      false,
+    );
+  });
+});
+
+test('保存期间改选别处或收起工具栏，完成后不恢复旧选区和旧工具栏', async () => {
+  await setup(async (page) => {
+    await select(page);
+    await page.evaluate(() => {
+      const toggle = GNStore.toggleMark;
+      GNStore.toggleMark = (...args) =>
+        new Promise((resolve) => {
+          window.completeToggle = async () => resolve(await toggle(...args));
+        });
+    });
+    await page.getByRole('button', { name: '高亮', exact: true }).click();
+    await page.waitForFunction(() => !!window.completeToggle);
+    await page.evaluate(() => {
+      const range = document.createRange();
+      range.selectNodeContents(document.querySelector('#other'));
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      __glassNoteV3.readSelection();
+    });
+    await page.evaluate(() => window.completeToggle());
+    await page.waitForFunction(() => !__glassNoteV3.savingSelection);
+    assert.match(await page.evaluate(() => getSelection().toString()), /^周围的段落/);
+    assert.equal(
+      await page.getByRole('button', { name: '高亮', exact: true }).getAttribute('aria-pressed'),
+      'false',
+    );
+    await page.getByRole('button', { name: '下划线', exact: true }).click();
+    await page.locator('h1').click();
+    await page.evaluate(() => window.completeToggle());
+    await page.waitForFunction(() => !__glassNoteV3.savingSelection);
+    assert.equal(await page.locator('.selection-toolbar').isVisible(), false);
+    assert.equal(await page.evaluate(() => getSelection().isCollapsed), true);
+  });
+});
+
+test('旧编辑器保存保留其他标签页取消的格式，记录被删后不复活且草稿可复制', async () => {
+  await setup(async (page) => {
+    await select(page);
+    await page.getByRole('button', { name: '高亮', exact: true }).click();
+    await page.waitForFunction(
+      () => !__glassNoteV3.savingSelection && __glassNoteV3.annotations.length === 1,
+    );
+    await page.evaluate(async () => {
+      const record = __glassNoteV3.annotations[0];
+      await GNStore.updateNote(location.href, record.id, { content: '最初的笔记' });
+      await __glassNoteV3.loadPage();
+      __glassNoteV3.openEditor(__glassNoteV3.annotations[0]);
+      // 另一标签页取消同一格式，编辑器仍持有打开时的高亮记录。
+      await GNStore.toggleMark(location.href, document.title, { ...record, id: 'another-tab' }, [
+        record.id,
+      ]);
+    });
+    await page.getByRole('textbox', { name: '笔记内容', exact: true }).fill('修改后的笔记');
+    await page.getByRole('button', { name: '保存笔记', exact: true }).click();
+    await page.waitForFunction(() => !__glassNoteV3.editor);
+    const saved = await page.evaluate(() => testDB.pages[location.href].annotations);
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].type, 'note');
+    assert.equal(saved[0].content, '修改后的笔记');
+    await page.evaluate(async () => {
+      __glassNoteV3.openEditor(__glassNoteV3.annotations[0]);
+      await GNStore.remove(location.href, __glassNoteV3.annotations[0].id);
+    });
+    await page.getByRole('textbox', { name: '笔记内容', exact: true }).fill('保留这个未保存草稿');
+    await page.getByRole('button', { name: '保存笔记', exact: true }).click();
+    await page.waitForFunction(() => __glassNoteV3.editor?.error.textContent.includes('已被删除'));
+    assert.equal(
+      await page.getByRole('textbox', { name: '笔记内容', exact: true }).inputValue(),
+      '保留这个未保存草稿',
+    );
+    assert.equal(await page.evaluate(() => testDB.pages[location.href].annotations.length), 0);
+  });
+});
+
+test('键盘改选后立即点击工具栏，使用当前选区而不是防抖前的旧选区', async () => {
+  await setup(async (page) => {
+    await select(page);
+    await page.evaluate(() => {
+      const range = document.createRange();
+      range.selectNodeContents(document.querySelector('#other'));
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      __glassNoteV3.toolbar.querySelector('[data-format="highlight"]').click();
+    });
+    await page.waitForFunction(
+      () => !__glassNoteV3.savingSelection && __glassNoteV3.annotations.length === 1,
+    );
+    assert.match(await page.evaluate(() => __glassNoteV3.annotations[0].text), /^周围的段落/);
   });
 });
 

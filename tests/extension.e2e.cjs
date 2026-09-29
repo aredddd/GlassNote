@@ -68,13 +68,17 @@ async function select(selector) {
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
   );
-  await page.evaluate((selector) => {
+  await page.evaluate(async (selector) => {
     const range = document.createRange();
     range.selectNodeContents(document.querySelector(selector));
     const selection = getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
     document.dispatchEvent(new Event('selectionchange'));
+    // 工具栏现在会保留，不能再把旧的 visible 状态当成新选区已就绪。
+    // 模拟真实鼠标选区完成，并让其即时读取任务先执行。
+    document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }, selector);
   await page.locator('.selection-toolbar').waitFor({ state: 'visible' });
 }
@@ -334,4 +338,256 @@ test('真实扩展：完全退出浏览器后重新启动，从磁盘恢复笔�
     original.annotations,
   );
   assert.equal((await store('getSettings')).defaultColor, 'blue');
+});
+
+function selectionButton(name) {
+  return page
+    .locator('#glassnote-root .selection-toolbar')
+    .getByRole('button', { name, exact: true });
+}
+
+async function markRecords(suffix) {
+  return (await store('getPage', { url: base + suffix })).annotations;
+}
+
+test('真实扩展：同一选区连续点击高亮、下划线、加粗分别添加和取消', async () => {
+  const suffix = '/toggle-formats';
+  await openArticle(suffix);
+  const original = await page.locator('#linked').innerHTML();
+  await select('#linked');
+  const selected = await page.evaluate(() => getSelection().toString());
+  for (const [name, type] of [
+    ['高亮', 'highlight'],
+    ['下划线', 'underline'],
+    ['加粗', 'bold'],
+  ]) {
+    const control = selectionButton(name);
+    await control.click();
+    await eventually(async () => {
+      const records = await markRecords(suffix);
+      return records.length === 1 && records[0].type === type;
+    }, `${name}首次点击只添加一条`);
+    await eventually(
+      async () => (await control.getAttribute('aria-pressed')) === 'true',
+      `${name}显示已选状态`,
+    );
+    assert.equal(
+      await page.evaluate(() => getSelection().toString()),
+      selected,
+      '添加格式后保留原选区',
+    );
+    assert.equal(await page.locator('#glassnote-root .selection-toolbar').isVisible(), true);
+    // 故意不重新选择文字：第二次点击必须可以直接取消。
+    await control.click();
+    await eventually(async () => (await markRecords(suffix)).length === 0, `${name}第二次点击取消`);
+    await eventually(
+      async () => (await control.getAttribute('aria-pressed')) === 'false',
+      `${name}取消后复位按钮`,
+    );
+    assert.equal(
+      await page.evaluate(() => getSelection().toString()),
+      selected,
+      '取消格式后仍保留原选区',
+    );
+    assert.equal(
+      await page.locator('#linked').innerHTML(),
+      original,
+      '反复切换格式不得改变宿主结构',
+    );
+  }
+  await page.reload();
+  await eventually(
+    async () => (await status()).total === 0 && (await status()).restored === 0,
+    '刷新后已取消的格式不会复活',
+  );
+});
+
+test('真实扩展：调色板换色更新同一条高亮，同色再次点击取消', async () => {
+  const suffix = '/toggle-colors';
+  await openArticle(suffix);
+  await select('#target');
+  await selectionButton('麦穗黄').click();
+  await eventually(async () => {
+    const records = await markRecords(suffix);
+    return records.length === 1 && records[0].type === 'highlight' && records[0].color === 'yellow';
+  }, '无高亮时点击颜色添加高亮');
+  const original = (await markRecords(suffix))[0];
+  await selectionButton('薄荷绿').click();
+  await eventually(async () => {
+    const records = await markRecords(suffix);
+    return records.length === 1 && records[0].id === original.id && records[0].color === 'green';
+  }, '换色更新原记录而不是新增');
+  await eventually(
+    async () => (await selectionButton('薄荷绿').getAttribute('aria-pressed')) === 'true',
+    '颜色按钮反映实际高亮',
+  );
+  assert.equal(await selectionButton('麦穗黄').getAttribute('aria-pressed'), 'false');
+  await selectionButton('薄荷绿').click();
+  await eventually(async () => (await markRecords(suffix)).length === 0, '同色再次点击取消高亮');
+  await eventually(
+    async () => (await selectionButton('薄荷绿').getAttribute('aria-pressed')) === 'false',
+    '取消后颜色按钮复位',
+  );
+  await selectionButton('雾霭蓝').click();
+  await eventually(
+    async () => (await markRecords(suffix))[0]?.color === 'blue',
+    '取消后同选区可重新加另一色',
+  );
+  await selectionButton('高亮').click();
+  await eventually(
+    async () => (await markRecords(suffix)).length === 0,
+    '高亮按钮取消已有格式不受当前颜色影响',
+  );
+});
+
+test('真实扩展：重复原文不同位置互不误删，只取消当前精确选区', async () => {
+  const suffix = '/toggle-repeated-text';
+  await openArticle(suffix);
+  await page.evaluate(() => {
+    const first = document.createElement('p');
+    first.id = 'same-text-first';
+    first.textContent = '完全相同的原文，也可能出现在页面上的不同位置。';
+    const second = first.cloneNode(true);
+    second.id = 'same-text-second';
+    document.querySelector('main').append(first, second);
+  });
+  await select('#same-text-first');
+  await selectionButton('高亮').click();
+  await eventually(async () => (await markRecords(suffix)).length === 1, '第一处同文保存');
+  const first = (await markRecords(suffix))[0];
+  await select('#same-text-second');
+  await eventually(
+    async () => (await selectionButton('高亮').getAttribute('aria-pressed')) === 'false',
+    '另一处同文不显示已有格式',
+  );
+  await selectionButton('高亮').click();
+  await eventually(async () => (await markRecords(suffix)).length === 2, '另一处同文独立添加');
+  const records = await markRecords(suffix);
+  assert.equal(records[0].anchor.quote.exact, records[1].anchor.quote.exact);
+  assert.notEqual(records[0].anchor.position.start, records[1].anchor.position.start);
+  await selectionButton('高亮').click();
+  await eventually(async () => {
+    const remaining = await markRecords(suffix);
+    return remaining.length === 1 && remaining[0].id === first.id;
+  }, '只取消第二处，第一处完整保留');
+  await select('#same-text-first');
+  await eventually(
+    async () => (await selectionButton('高亮').getAttribute('aria-pressed')) === 'true',
+    '重新选中第一处显示已有格式',
+  );
+  await selectionButton('高亮').click();
+  await eventually(async () => (await markRecords(suffix)).length === 0, '第一处可独立取消');
+});
+
+test('真实扩展：前文插入和节点重包后，再选同一原文仍能取消已有格式', async () => {
+  const suffix = '/toggle-reanchored-text';
+  await openArticle(suffix);
+  await select('#target');
+  await selectionButton('高亮').click();
+  await eventually(async () => (await markRecords(suffix)).length === 1, '结构变化前保存');
+  await page.evaluate(() => {
+    document.querySelector('#intro').prepend(document.createTextNode('这是后来插入的一段前文。'));
+    const target = document.querySelector('#target');
+    const wrapper = document.createElement('span');
+    while (target.firstChild) wrapper.append(target.firstChild);
+    target.append(wrapper);
+  });
+  await eventually(async () => (await status()).restored === 1, '结构变化后旧锚点重新定位');
+  await select('#target');
+  await eventually(
+    async () => (await selectionButton('高亮').getAttribute('aria-pressed')) === 'true',
+    '使用当前 Range 识别同一位置',
+  );
+  await selectionButton('高亮').click();
+  await eventually(
+    async () => (await markRecords(suffix)).length === 0,
+    '重新定位的原文取消格式而非新增',
+  );
+});
+
+test('真实扩展：旧版同位置重复高亮一次取消，其他格式仍保留', async () => {
+  const suffix = '/toggle-legacy-duplicates';
+  await openArticle(suffix);
+  await select('#target');
+  await selectionButton('高亮').click();
+  await eventually(
+    async () => (await markRecords(suffix)).length === 1,
+    '创建待模拟旧重复数据的标注',
+  );
+  const saved = (await markRecords(suffix))[0];
+  await store('upsert', {
+    url: base + suffix,
+    annotation: { ...saved, id: 'old-duplicate-yellow', color: 'yellow' },
+  });
+  await store('upsert', {
+    url: base + suffix,
+    annotation: { ...saved, id: 'old-duplicate-green', color: 'green' },
+  });
+  await store('upsert', {
+    url: base + suffix,
+    annotation: { ...saved, id: 'keep-underline', type: 'underline' },
+  });
+  await page.reload();
+  await eventually(async () => (await status()).total === 4, '旧同处重复条目加载');
+  await select('#target');
+  await selectionButton('高亮').click();
+  await eventually(async () => {
+    const remaining = await markRecords(suffix);
+    return (
+      remaining.length === 1 &&
+      remaining[0].id === 'keep-underline' &&
+      remaining[0].type === 'underline'
+    );
+  }, '一次取消全部同处同类型高亮，不删除下划线');
+  await eventually(
+    async () => (await selectionButton('下划线').getAttribute('aria-pressed')) === 'true',
+    '其他格式仍显示有效',
+  );
+  assert.equal(await selectionButton('高亮').getAttribute('aria-pressed'), 'false');
+});
+
+test('真实扩展：取消附带想法的高亮只移除格式，保留笔记和原文锚点', async () => {
+  const suffix = '/toggle-preserve-note';
+  await openArticle(suffix);
+  await select('#target');
+  await selectionButton('高亮').click();
+  await eventually(async () => (await markRecords(suffix)).length === 1, '带想法的标注先保存高亮');
+  const original = (await markRecords(suffix))[0];
+  await send({ action: 'openPanel' });
+  await page
+    .locator(`#glassnote-root .card[data-annotation-id="${original.id}"]`)
+    .getByRole('button', { name: '写笔记', exact: true })
+    .click();
+  const content = '取消的是高亮格式，这段已经写好的想法必须保留。';
+  await page.getByRole('textbox', { name: '笔记内容', exact: true }).fill(content);
+  await page.getByRole('button', { name: '保存笔记', exact: true }).click();
+  await eventually(
+    async () => (await markRecords(suffix))[0]?.content === content,
+    '想法附着到同一条标注',
+  );
+  await page
+    .locator('#glassnote-root')
+    .getByRole('button', { name: '关闭笔记面板', exact: true })
+    .click();
+  await select('#target');
+  await selectionButton('高亮').click();
+  await eventually(async () => {
+    const records = await markRecords(suffix);
+    return (
+      records.length === 1 &&
+      records[0].id === original.id &&
+      records[0].type === 'note' &&
+      records[0].content === content
+    );
+  }, '取消高亮转为同 ID 笔记');
+  const note = (await markRecords(suffix))[0];
+  assert.equal(note.text, original.text);
+  assert.deepEqual(note.anchor, original.anchor);
+  await page.reload();
+  await eventually(
+    async () => (await status()).total === 1 && (await status()).restored === 1,
+    '刷新后笔记和原文定位均保留',
+  );
+  assert.equal((await markRecords(suffix))[0].content, content);
+  assert.deepEqual(errors, []);
 });

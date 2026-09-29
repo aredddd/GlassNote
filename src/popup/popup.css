@@ -1,7 +1,7 @@
 body {
   width: 400px;
-  min-height: 580px;
   background: radial-gradient(ellipse at 95% 5%, #dceee580, transparent 45%), var(--paper);
+  background-attachment: fixed;
 }
 .popup {
   padding: 16px 20px 12px;
@@ -15,14 +15,6 @@ body {
 .brand {
   font-size: 20px;
 }
-.brand small {
-  display: block;
-  margin-top: 2px;
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-}
 .brand-mark {
   width: 38px;
   height: 42px;
@@ -31,7 +23,7 @@ body {
   padding: 13px 15px 11px;
   border-radius: 16px;
 }
-.eyebrow {
+.page-meta {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -99,11 +91,6 @@ body {
 .row-title {
   font-size: 12px;
   font-weight: 600;
-}
-.row-description {
-  margin-left: 9px;
-  font-size: 10px;
-  color: var(--muted);
 }
 .quick-actions {
   display: grid;
@@ -179,7 +166,6 @@ body {
   color: var(--muted);
 }
 .recent-notes {
-  min-height: 98px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -225,30 +211,6 @@ body {
   color: var(--muted);
   margin-top: 4px;
 }
-.recent-empty {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 12px;
-  border: 1px dashed #c9d6cd;
-  border-radius: 12px;
-  color: var(--muted);
-}
-.recent-empty > svg {
-  height: 34px;
-  width: 34px;
-  color: #8ea998;
-  flex-shrink: 0;
-}
-.recent-empty p {
-  font-size: 11px;
-  margin: 0 0 4px;
-  color: var(--ink);
-}
-.recent-empty small {
-  font-size: 10px;
-  line-height: 1.7;
-}
 .popup-footer {
   border-top: 1px solid var(--line);
   margin-top: 14px;
@@ -280,13 +242,6 @@ body {
   width: 19px;
   height: 19px;
 }
-.library-link small {
-  display: block;
-  font-size: 9px;
-  color: var(--muted);
-  margin-top: 3px;
-  font-weight: 400;
-}
 .footer-arrow {
   margin-left: auto;
   width: 18px;
@@ -295,19 +250,6 @@ body {
 }
 .library-link:hover .footer-arrow {
   transform: translateX(3px);
-}
-.local-caption {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  margin-top: 12px;
-  color: #718374;
-  font-size: 9px;
-}
-.local-caption svg {
-  width: 10px;
-  height: 10px;
 }
 .loading-text {
   color: var(--muted);

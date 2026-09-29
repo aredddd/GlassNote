@@ -70,15 +70,9 @@
   function renderRecent(annotations) {
     const holder = $('recentNotes');
     holder.replaceChildren();
+    document.querySelector('.recent-section').hidden = !annotations.length;
     $('recentCount').textContent = annotations.length ? `${annotations.length} 条已保存` : '';
-    if (!annotations.length) {
-      const empty = document.createElement('div');
-      empty.className = 'recent-empty';
-      empty.innerHTML =
-        '<svg aria-hidden="true" viewBox="0 0 40 40"><path d="M10 6h18v29H10zM15 13h8M15 18h8M15 23h4M6 11v22"/><path d="m26 23 5-5 3 3-5 5-4 1 1-4Z"/></svg><div><p>从一句触动你的话开始</p><small>选中文字留下标注，下次打开还能接着读。</small></div>';
-      holder.append(empty);
-      return;
-    }
+    if (!annotations.length) return;
     [...annotations]
       .sort(
         (a, b) =>
@@ -119,9 +113,6 @@
       page = savedPage;
       const annotations = page?.annotations || [];
       $('enableToggle').checked = settings.enabled;
-      $('enableDescription').textContent = settings.enabled
-        ? '选中文字，记下所想'
-        : '已暂停网页上的标注';
       $('highlightCount').textContent = annotations.filter((a) => a.type !== 'note').length;
       $('noteCount').textContent = annotations.filter(
         (a) => a.type === 'note' || a.content?.trim(),
@@ -130,11 +121,14 @@
       $('pageStatus').textContent = supported
         ? annotations.length
           ? `${annotations.length} 条内容已保存在此浏览器`
-          : '阅读时标注，想法随时保存'
+          : ''
         : '浏览器系统页不支持标注，可打开笔记库';
+      document.querySelector('.page-status').hidden = !$('pageStatus').textContent;
       renderRecent(annotations);
     } catch (error) {
       $('pageStatus').textContent = '笔记读取失败，请重试';
+      document.querySelector('.page-status').hidden = false;
+      document.querySelector('.recent-section').hidden = false;
       $('recentNotes').replaceChildren();
       const retry = document.createElement('button');
       retry.className = 'button secondary';

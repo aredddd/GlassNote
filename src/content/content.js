@@ -146,15 +146,18 @@
       this.toolbar.append(
         button('高亮', 'tool primary-tool', 'mark', () => this.saveSelection('highlight')),
         button('下划线', 'tool icon-only', 'underline', () => this.saveSelection('underline')),
-        button('强调', 'tool icon-only', 'bold', () => this.saveSelection('bold')),
+        button('加粗', 'tool icon-only', 'bold', () => this.saveSelection('bold')),
         node('span', 'divider'),
-        this.makePalette((color) => {
-          this.color = color;
-          this.updatePalette(this.toolbar, color);
-        }),
+        this.makePalette((color) => this.saveSelection('highlight', color), null, false),
         node('span', 'divider'),
         button('写笔记', 'tool', 'note', () => this.openEditor()),
       );
+      for (const [index, type] of ['highlight', 'underline', 'bold'].entries()) {
+        const control = this.toolbar.children[index];
+        control.dataset.format = type;
+        control.setAttribute('aria-pressed', 'false');
+      }
+      this.toolbar.querySelector('.palette').setAttribute('aria-label', '高亮颜色，再次点击取消');
       this.shadow.append(this.toolbar);
 
       this.launcher = button('打开本页笔记', 'launcher glass', 'book', () => this.openPanel());
@@ -175,7 +178,6 @@
         button('关闭笔记面板', 'icon-button icon-only', 'close', () => this.closePanel()),
       );
       const intro = node('div', 'panel-intro');
-      intro.append(node('div', 'eyebrow', '留住阅读时的灵感'));
       this.pageTitle = node('h2', 'page-title');
       this.summary = node('p', 'page-summary');
       intro.append(this.pageTitle, this.summary);
@@ -215,7 +217,6 @@
       footer.append(
         button('新建页面笔记', 'primary wide', 'plus', () => this.openEditor(null, true)),
       );
-      footer.append(node('p', 'footnote', '保存在此浏览器 · 选中文字即可标注'));
       this.panel.append(header, intro, this.notice, controls, this.cards, footer);
       this.shadow.append(this.panel);
 
@@ -343,7 +344,7 @@
               COLORS[this.settings.defaultColor]
             ) {
               this.color = this.settings.defaultColor;
-              this.updatePalette(this.toolbar, this.color);
+              this.updateSelectionTools();
             }
             if (!previousAutoRestore && this.settings.autoRestore) this.restoreAllowed = true;
             if (previousEnabled !== this.settings.enabled) this.applyEnabled();
@@ -591,7 +592,7 @@
       this.selectedRange = range.cloneRange();
       this.selectedUrl = this.url;
       this.toolbar.hidden = false;
-      this.updatePalette(this.toolbar, this.color);
+      this.updateSelectionTools();
       const rects = range.getClientRects();
       const rect = rects[rects.length - 1] || range.getBoundingClientRect();
       const width = this.toolbar.offsetWidth;
@@ -614,13 +615,66 @@
 
     captureSelection() {
       this.checkRoute();
+      // 键盘改选后的 selectionchange 有防抖，提交时读取当前选区，避免使用上一段。
+      // 页面路由切换已清除 selectedUrl，不能在这里恢复旧页面留下的选区。
+      const selection = document.getSelection();
+      if (this.selectedUrl === this.url && selection?.rangeCount && !selection.isCollapsed) {
+        const range = selection.getRangeAt(0);
+        if (
+          document.body?.contains(range.commonAncestorContainer) &&
+          !isEditable(range.startContainer) &&
+          !isEditable(range.endContainer)
+        )
+          this.selectedRange = range.cloneRange();
+      }
       if (!this.validSelection()) return null;
       const anchor = GNAnchor.capture(this.selectedRange, document.body);
       if (!anchor) throw new Error('这段文字无法稳定定位，请重新选择正文中的文字。');
       return { text: this.selectedRange.toString().trim(), anchor };
     }
 
-    async saveSelection(type) {
+    selectionMatches(selected, annotations = this.annotations) {
+      // 在同一份正文索引中还原两端，兼容元素边界选区、首尾空白和 DOM 包装变化。
+      // 文本相同但位置不同的记录不能互相取消。
+      const resolver = GNAnchor.createResolver(document.body);
+      const selection = resolver.resolve(selected);
+      if (!selection) throw new Error('原文位置已变化，请重新选择这段文字。');
+      return annotations.filter((annotation) => {
+        const range = resolver.resolve(annotation);
+        return (
+          range &&
+          range.startContainer === selection.startContainer &&
+          range.startOffset === selection.startOffset &&
+          range.endContainer === selection.endContainer &&
+          range.endOffset === selection.endOffset
+        );
+      });
+    }
+
+    updateSelectionTools() {
+      if (!this.toolbar || this.toolbar.hidden || !this.validSelection()) return;
+      let matches = [];
+      try {
+        const selected = this.captureSelection();
+        if (selected) matches = this.selectionMatches(selected);
+      } catch (_) {
+        // 页面变化时撤销选中态；实际保存会显示重新选择的提示。
+      }
+      for (const control of this.toolbar.querySelectorAll('[data-format]')) {
+        control.setAttribute(
+          'aria-pressed',
+          String(matches.some((item) => item.type === control.dataset.format)),
+        );
+      }
+      const highlights = matches.filter((item) => item.type === 'highlight');
+      const color =
+        highlights.length && highlights.every((item) => item.color === highlights[0].color)
+          ? highlights[0].color
+          : null;
+      this.updatePalette(this.toolbar, color);
+    }
+
+    async saveSelection(type, color = null) {
       if (this.savingSelection) return false;
       this.checkRoute();
       const url = this.url;
@@ -642,22 +696,34 @@
         type,
         ...selected,
         content: '',
-        color: this.color,
+        color: color || this.color,
         createdAt: now,
         updatedAt: now,
       };
       this.savingSelection = true;
       for (const item of this.toolbar.querySelectorAll('button')) item.disabled = true;
       try {
-        await GNStore.upsert(url, title, annotation);
-        this.toolbar.hidden = true;
-        document.getSelection()?.removeAllRanges();
-        this.selectedRange = null;
+        const latest = await GNStore.getPage(url);
+        this.checkRoute();
+        if (this.url !== url) throw new Error('页面已切换，请重新选择文字。');
+        const matchingIds = this.selectionMatches(selected, latest.annotations || []).map(
+          (item) => item.id,
+        );
+        const result = await GNStore.toggleMark(
+          url,
+          title,
+          annotation,
+          matchingIds,
+          color !== null,
+        );
+        if (color) this.color = color;
         if (this.url === url) await this.loadPage({ forceRestore: true });
         this.showToast(
-          this.settings.autoRestore
-            ? '标注已保存，下次打开会自动恢复。'
-            : '标注已保存，可在本页笔记中重新查看。',
+          result.action === 'removed'
+            ? '已取消该格式，写过的笔记会保留。'
+            : result.action === 'updated'
+              ? '已更新高亮颜色，再次点击同一颜色可取消。'
+              : '标注已保存，再次点击可取消。',
         );
         return true;
       } catch (error) {
@@ -669,14 +735,14 @@
       }
     }
 
-    makePalette(onChange, selected = 'yellow') {
+    makePalette(onChange, selected = 'yellow', reflectSelection = true) {
       const palette = node('div', 'palette');
       palette.setAttribute('role', 'group');
       palette.setAttribute('aria-label', '标注颜色');
       for (const [color, label] of Object.entries(COLORS)) {
         const swatch = button(label, 'swatch icon-only', null, () => {
           onChange(color);
-          this.updatePalette(palette, color);
+          if (reflectSelection) this.updatePalette(palette, color);
         });
         swatch.dataset.color = color;
         swatch.setAttribute('aria-pressed', String(color === selected));
@@ -712,6 +778,7 @@
 
     render() {
       if (!this.panel) return;
+      this.updateSelectionTools();
       const total = this.annotations.length;
       const unresolved =
         this.settings.enabled && this.restoreAllowed
@@ -777,21 +844,7 @@
       this.cards.replaceChildren();
       if (!visible.length) {
         const empty = node('div', 'empty');
-        empty.append(
-          node('div', 'empty-symbol', '“'),
-          node('h3', '', this.annotations.length ? '还没有匹配的内容' : '好想法，值得留下'),
-        );
-        empty.append(
-          node(
-            'p',
-            '',
-            this.annotations.length
-              ? '换个关键词，或查看全部记录。'
-              : '选中网页中的一段文字，留下高亮、下划线，或写下你的想法。',
-          ),
-        );
-        if (!this.annotations.length)
-          empty.append(node('div', 'empty-hint', '下次回来，继续上次的思考。'));
+        empty.append(node('h3', '', this.annotations.length ? '没有匹配记录' : '暂无笔记'));
         this.cards.append(empty);
       }
       for (const annotation of visible) this.cards.append(this.annotationCard(annotation));
@@ -1006,8 +1059,7 @@
       dialog.setAttribute('aria-labelledby', 'gn-editor-title');
       const header = node('header', 'editor-header');
       const headings = node('div');
-      headings.append(node('div', 'eyebrow', record.text ? '与原文一起保存' : '页面笔记'));
-      const heading = node('h2', '', annotation ? '继续你的想法' : '记下一个想法');
+      const heading = node('h2', '', annotation ? '编辑笔记' : '新建笔记');
       heading.id = 'gn-editor-title';
       headings.append(heading);
       header.append(
@@ -1020,7 +1072,6 @@
       body.append(page);
       if (record.text) body.append(node('blockquote', 'editor-quote', record.text));
       const textarea = node('textarea', 'note-input');
-      textarea.placeholder = '这个片段让你想到了什么？';
       textarea.value = record.content || '';
       textarea.setAttribute('aria-label', '笔记内容');
       textarea.maxLength = 100000;
@@ -1030,20 +1081,13 @@
         record.color = color;
         this.updateDraftStatus();
       }, record.color);
-      const hint = node('span', 'draft-status', '保存后，下次打开仍可查看');
+      const hint = node('span', 'draft-status');
       detail.append(palette, hint);
       const error = node('div', 'editor-error');
       error.hidden = true;
       error.setAttribute('role', 'alert');
       body.append(textarea, detail, error);
       const footer = node('footer', 'editor-footer');
-      footer.append(
-        node(
-          'span',
-          'keyboard-hint',
-          `${/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'} + Enter 保存`,
-        ),
-      );
       const actions = node('div', 'action-row');
       const cancel = button('取消', 'secondary', null, () => this.closeEditor());
       const save = button('保存笔记', 'primary', 'check', () => this.saveEditor());
@@ -1068,6 +1112,7 @@
         overlay,
         dialog,
         record,
+        existing: !!annotation,
         url: this.url,
         title: this.title,
         original: record.content || '',
@@ -1094,9 +1139,7 @@
 
     updateDraftStatus() {
       if (!this.editor) return;
-      this.editor.hint.textContent = this.editorDirty()
-        ? '草稿尚未保存'
-        : '保存后，下次打开仍可查看';
+      this.editor.hint.textContent = this.editorDirty() ? '草稿尚未保存' : '';
       this.editor.error.hidden = true;
     }
 
@@ -1137,11 +1180,18 @@
       editor.save.querySelector('span').textContent = '正在保存…';
       editor.error.hidden = true;
       try {
-        await GNStore.upsert(editor.url, editor.title, {
-          ...editor.record,
-          content,
-          updatedAt: Date.now(),
-        });
+        if (editor.existing) {
+          await GNStore.updateNote(editor.url, editor.record.id, {
+            content,
+            ...(editor.record.color !== editor.originalColor ? { color: editor.record.color } : {}),
+          });
+        } else {
+          await GNStore.upsert(editor.url, editor.title, {
+            ...editor.record,
+            content,
+            updatedAt: Date.now(),
+          });
+        }
         editor.saving = false;
         this.closeEditor(true);
         document.getSelection()?.removeAllRanges();
@@ -1327,7 +1377,7 @@
     .tool:hover {
       background: #e8f1eb;
     }
-    .primary-tool {
+    .tool[aria-pressed="true"] {
       background: #e5eee7;
       color: #24584b;
     }
@@ -1455,13 +1505,6 @@
     }
     .panel-intro {
       padding: 16px 24px 18px;
-    }
-    .eyebrow {
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 1.5px;
-      color: #829284;
-      margin-bottom: 10px;
     }
     .page-title {
       font-size: 21px;
@@ -1715,41 +1758,16 @@
     .wide {
       width: 100%;
     }
-    .footnote {
-      font-size: 10px;
-      color: #a5ae9c;
-      text-align: center;
-      margin-top: 11px;
-      letter-spacing: 0.15px;
-    }
     .empty {
       padding: 35px 10px;
       text-align: center;
       color: #87927e;
-    }
-    .empty-symbol {
-      font-family: Georgia, serif;
-      font-size: 63px;
-      height: 64px;
-      color: #c5d3b9;
     }
     .empty h3 {
       font-size: 16px;
       font-weight: 600;
       color: #718167;
       margin-bottom: 12px;
-    }
-    .empty p {
-      font-size: 12px;
-      line-height: 1.9;
-      max-width: 240px;
-      margin: 0 auto;
-    }
-    .empty-hint {
-      font-family: Georgia, "Songti SC", serif;
-      font-size: 12px;
-      margin-top: 32px;
-      color: #a8b19f;
     }
     .muted {
       color: #a2aa9b;
@@ -1805,9 +1823,6 @@
       justify-content: space-between;
       align-items: flex-start;
       padding: 26px 27px 17px;
-    }
-    .editor-header .eyebrow {
-      margin-bottom: 7px;
     }
     .editor-header h2 {
       font-family: Georgia, "Songti SC", serif;
@@ -1876,15 +1891,11 @@
     }
     .editor-footer {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-end;
       align-items: center;
       gap: 15px;
       padding: 17px 27px 23px;
       border-top: 1px solid #ebeee2;
-    }
-    .keyboard-hint {
-      font-size: 10px;
-      color: #acb39f;
     }
     .action-row {
       display: flex;
@@ -1995,9 +2006,6 @@
       }
       .editor-footer {
         padding: 15px 20px 20px;
-      }
-      .keyboard-hint {
-        display: none;
       }
       .editor-footer .action-row {
         margin-left: auto;

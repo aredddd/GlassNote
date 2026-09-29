@@ -1,0 +1,62 @@
+name: 缺陷报告
+description: 报告标注、笔记保存、恢复或界面中的问题
+title: '[Bug] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        安全漏洞请使用[私密报告](https://github.com/aredddd/GlassNote/security/advisories/new)，不要公开利用细节。
+        备份包含 URL、摘录、前后文和笔记。请使用公开网页或合成示例，不要上传真实完整备份、令牌、账号信息或私人截图。
+  - type: checkboxes
+    id: preparation
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索已有 Issue，未找到能覆盖此问题的报告。
+          required: true
+        - label: 以下内容及附件已经脱敏，不含私人笔记、完整真实备份或凭据。
+          required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 使用环境
+      description: 可在浏览器扩展管理页查看 GlassNote 版本。
+      placeholder: |
+        GlassNote 版本或提交：
+        浏览器名称与完整版本：
+        操作系统：
+        安装方式（源码加载、下载包、商店等）：
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: 写明是首次创建、刷新、关闭重开、页面切换、升级还是导入后出现。
+      placeholder: |
+        1. 打开……
+        2. 选择……并保存……
+        3. 刷新或重新打开后……
+    validations:
+      required: true
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: 预期与实际结果
+      description: 如果标注消失或漂移，请说明笔记库里是否仍能看到摘录和想法，以及是否提示未定位或保存失败。
+      placeholder: |
+        预期：
+        实际：
+        出现频率：
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: 最小示例与截图
+      description: 可提供公开页面地址、最小 HTML、合成备份或脱敏截图。私人网页不必提供原地址；请用示例文字描述结构。
+  - type: textarea
+    id: logs
+    attributes:
+      label: 错误信息或其他线索
+      description: 如有错误提示，请粘贴相关片段。不要附上整个浏览器配置或未经检查的日志。

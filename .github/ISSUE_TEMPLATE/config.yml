@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 私密安全报告
+    url: https://github.com/aredddd/GlassNote/security/advisories/new
+    about: 漏洞利用细节和敏感复现材料请勿发布到公开 Issue。
+  - name: 使用说明与支持范围
+    url: https://github.com/aredddd/GlassNote/blob/main/README.md
+    about: 查看安装、升级、备份与网页兼容范围。

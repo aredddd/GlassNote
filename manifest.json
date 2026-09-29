@@ -1,17 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "GlassNote - 网页标注助手",
-  "version": "0.1.0",
-  "description": "基于图层覆盖技术的网页标注浏览器插件，支持非侵入式文本标注和便利贴记录",
-  "permissions": [
-    "activeTab",
-    "storage",
-    "scripting"
-  ],
+  "name": "GlassNote · 留住阅读的灵感",
+  "version": "3.0.0",
+  "minimum_chrome_version": "105",
+  "description": "轻盈的网页高亮与笔记工具。自动找回原文位置，本地保存，随时整理和导出。",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "background": { "service_worker": "src/background/background.js" },
+  "options_page": "src/library/library.html",
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["src/content/content.js"],
+      "matches": ["http://*/*", "https://*/*", "file:///*"],
+      "js": ["src/shared/anchor.js", "src/shared/store.js", "src/content/content.js"],
       "css": ["styles/content.css"],
       "run_at": "document_end"
     }

@@ -1,0 +1,19 @@
+{
+  "name": "glassnote",
+  "version": "3.0.0",
+  "private": true,
+  "description": "轻盈、可靠的本地网页笔记工具",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "test:e2e": "node --test tests/extension.e2e.cjs",
+    "test:live": "node tests/live-site.cjs",
+    "check": "node scripts/check.cjs",
+    "format": "prettier --write src styles scripts tests manifest.json package.json README.md",
+    "format:check": "prettier --check src styles scripts tests manifest.json package.json README.md",
+    "package": "node scripts/package.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0",
+    "prettier": "3.9.9"
+  }
+}

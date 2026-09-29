@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "GlassNote",
-  "version": "3.0.0",
+  "name": "__MSG_extensionName__",
+  "version": "3.0.1",
+  "default_locale": "zh_CN",
   "minimum_chrome_version": "105",
-  "description": "轻盈的网页高亮与笔记工具。自动找回原文位置，本地保存，随时整理和导出。",
+  "description": "__MSG_extensionDescription__",
   "permissions": ["activeTab", "storage", "scripting"],
   "background": { "service_worker": "src/background/background.js" },
   "options_page": "src/library/library.html",

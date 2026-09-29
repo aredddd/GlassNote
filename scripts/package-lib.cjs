@@ -13,6 +13,7 @@ const REQUIRED_FILES = [
   'SECURITY.md',
 ];
 const TREES = {
+  _locales: /\.json$/,
   src: /\.(js|html|css)$/,
   styles: /\.css$/,
   assets: /\.(png|svg|ico|webp)$/,

@@ -1,6 +1,6 @@
 # Edge 商店发布材料
 
-对应版本：3.0.0。此文件是提交材料，不代表已经提交审核或已经上架。
+对应版本：3.0.1。此文件是提交材料，不代表已经提交审核或已经上架。
 
 ## 商店字段
 
@@ -57,7 +57,7 @@ GlassNote 用于在网页中标注文字、记录笔记，并在以后打开同�
 
 ## 资源规格与官方入口
 
-安装包位于 dist/GlassNote-v3.0.0.zip；商店图标可用 assets/icon-128.png。截图使用扩展实际运行界面，尺寸为 1280 × 800，不放入用户的私人笔记或第三方宣传素材。
+安装包位于 dist/GlassNote-v3.0.1.zip；商店图标可用 assets/icon-128.png。截图使用扩展实际运行界面，尺寸为 1280 × 800，不放入用户的私人笔记或第三方宣传素材。
 
 - [Edge 开发者注册](https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/create-dev-account)
 - [Edge 扩展发布说明](https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension)

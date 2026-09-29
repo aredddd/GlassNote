@@ -1,5 +1,12 @@
 # 更新日志
 
+## [3.0.1] - 2026-09-29
+
+### 修复
+
+- 补充简体中文语言声明，使 Edge 商店正确识别扩展语言并提供中文介绍页。
+- 打包流程纳入语言文件，检查缺失的语言消息引用。
+
 ## [3.0.0] - 2026-09-29
 
 ### 新增
@@ -29,3 +36,4 @@
 更早版本尚未整理为独立发行记录，历史改动见 [Git 提交记录](https://github.com/aredddd/GlassNote/commits/main/)。
 
 [3.0.0]: https://github.com/aredddd/GlassNote/releases/tag/v3.0.0
+[3.0.1]: https://github.com/aredddd/GlassNote/releases/tag/v3.0.1

@@ -1,6 +1,6 @@
 {
   "name": "glassnote",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "private": true,
   "description": "轻盈、可靠的本地网页笔记工具",
   "scripts": {
@@ -8,8 +8,8 @@
     "test:e2e": "node --test tests/extension.e2e.cjs",
     "test:live": "node tests/live-site.cjs",
     "check": "node scripts/check.cjs",
-    "format": "prettier --write src styles scripts tests .github docs manifest.json package.json package-lock.json \"*.md\"",
-    "format:check": "prettier --check src styles scripts tests .github docs manifest.json package.json package-lock.json \"*.md\"",
+    "format": "prettier --write src styles _locales scripts tests .github docs manifest.json package.json package-lock.json \"*.md\"",
+    "format:check": "prettier --check src styles _locales scripts tests .github docs manifest.json package.json package-lock.json \"*.md\"",
     "package": "node scripts/package.cjs",
     "package:verify": "node scripts/verify-package.cjs"
   },

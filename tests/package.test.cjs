@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { createHash } = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 const {
   packageExtension,
   releaseVersion,
@@ -18,7 +19,23 @@ function fixture(t) {
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     fs.writeFileSync(path.join(root, name), value);
   };
-  write('manifest.json', JSON.stringify({ manifest_version: 3, version: '3.2.1' }));
+  write(
+    'manifest.json',
+    JSON.stringify({
+      manifest_version: 3,
+      version: '3.2.1',
+      name: '__MSG_extensionName__',
+      description: '__MSG_extensionDescription__',
+      default_locale: 'zh_CN',
+    }),
+  );
+  write(
+    '_locales/zh_CN/messages.json',
+    JSON.stringify({
+      extensionName: { message: 'GlassNote' },
+      extensionDescription: { message: '轻盈的网页高亮与笔记工具。' },
+    }),
+  );
   write('package.json', JSON.stringify({ version: '3.2.1' }));
   write(
     'package-lock.json',
@@ -56,17 +73,23 @@ test('发布包按版本命名，附许可证和隐私声明，排除依赖、�
   assert.equal(path.basename(result.archive), 'GlassNote-v3.2.1.zip');
   const archive = fs.readFileSync(result.archive);
   const entries = readArchive(archive);
-  assert.equal(entries.size, 11);
+  assert.equal(entries.size, 12);
   for (const name of [
     'LICENSE',
     'PRIVACY.md',
     'THIRD_PARTY_NOTICES.md',
     'CONTRIBUTING.md',
     'SECURITY.md',
+    '_locales/zh_CN/messages.json',
     'docs/安装说明.md',
   ])
     assert.ok(entries.has(name), name);
   assert.equal(entries.get('docs/安装说明.md').toString(), '中文文档应当正确保存在 ZIP 中。\n');
+  const manifest = JSON.parse(entries.get('manifest.json').toString());
+  const messages = JSON.parse(entries.get('_locales/zh_CN/messages.json').toString());
+  assert.equal(manifest.default_locale, 'zh_CN');
+  assert.equal(messages.extensionName.message, 'GlassNote');
+  assert.equal(messages.extensionDescription.message, '轻盈的网页高亮与笔记工具。');
   assert.ok(
     [...entries.keys()].every((name) => !/node_modules|work\/|tests\/|\.env|debug/.test(name)),
   );
@@ -124,4 +147,33 @@ test('发布白名单内的符号链接不能将外部文件带入安装包', (t
   const { root, output } = fixture(t);
   fs.symlinkSync(path.join(root, 'LICENSE'), path.join(root, 'src/linked.js'));
   assert.throws(() => packageExtension(root, output), /符号链接/);
+});
+
+test('扩展检查拒绝缺失默认语言声明、语言包或 manifest 引用的消息', (t) => {
+  const { root, write } = fixture(t);
+  write('scripts/check.cjs', fs.readFileSync(path.join(__dirname, '../scripts/check.cjs')));
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+  Object.assign(manifest, {
+    background: { service_worker: 'src/background/background.js' },
+    action: { default_popup: 'src/background/background.js' },
+    options_page: 'src/background/background.js',
+    icons: {},
+    content_scripts: [],
+  });
+  const saveManifest = () => write('manifest.json', JSON.stringify(manifest));
+  const check = () =>
+    spawnSync(process.execPath, [path.join(root, 'scripts/check.cjs')], { encoding: 'utf8' });
+  saveManifest();
+  assert.equal(check().status, 0);
+  delete manifest.default_locale;
+  saveManifest();
+  assert.match(check().stderr, /必须声明 default_locale/);
+  manifest.default_locale = 'zh_CN';
+  manifest.name = '__MSG_missingName__';
+  saveManifest();
+  assert.match(check().stderr, /缺少 manifest 引用的消息：missingName/);
+  write('_locales/zh_CN/messages.json', JSON.stringify({ extensionName: { message: '' } }));
+  assert.match(check().stderr, /消息内容不能为空/);
+  fs.rmSync(path.join(root, '_locales/zh_CN/messages.json'));
+  assert.match(check().stderr, /缺少默认语言包/);
 });

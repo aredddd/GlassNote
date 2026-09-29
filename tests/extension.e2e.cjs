@@ -98,6 +98,20 @@ after(async () => {
   fs.rmSync(profile, { recursive: true, force: true });
 });
 
+test('真实扩展：默认简体中文语言资源可解析', async () => {
+  const localized = await worker.evaluate(() => ({
+    name: chrome.runtime.getManifest().name,
+    description: chrome.runtime.getManifest().description,
+    message: chrome.i18n.getMessage('extensionDescription'),
+  }));
+  assert.equal(localized.name, 'GlassNote');
+  assert.equal(
+    localized.description,
+    '轻盈的网页高亮与笔记工具。自动找回原文位置，本地保存，随时整理和导出。',
+  );
+  assert.equal(localized.message, localized.description);
+});
+
 test('真实扩展：跨节点标注不破坏链接，隐藏保留原文，刷新和关页重开恢复', async () => {
   await openArticle();
   const beforeHTML = await page.locator('#linked').innerHTML();

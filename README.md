@@ -1,6 +1,11 @@
 # GlassNote
 
-留住阅读时的一点灵感。GlassNote 是一个 Chrome 网页高亮与笔记扩展，笔记保存在自己的浏览器里。
+[![CI](https://github.com/aredddd/GlassNote/actions/workflows/ci.yml/badge.svg)](https://github.com/aredddd/GlassNote/actions/workflows/ci.yml)
+[![许可证：MIT](https://img.shields.io/badge/license-MIT-3b6b56)](LICENSE)
+
+GlassNote 是一个适用于 Edge 和 Chrome 的网页高亮与笔记扩展。选中文字即可标注、记笔记，并在下次打开网页时恢复。数据保存在自己的浏览器里。
+
+![GlassNote 网页标注和页面笔记面板](docs/screenshots/web-annotations.png)
 
 ## v3 改了什么
 
@@ -12,10 +17,12 @@
 
 ## 安装与升级
 
-适用于支持 CSS Custom Highlight API 的桌面 Chromium 浏览器（Chrome 105 或更新版本）。
+适用于支持 CSS Custom Highlight API 的桌面 Chromium 浏览器，最低内核版本为 Chromium 105。
 
-1. 下载源码或解压安装包。
-2. 打开 chrome://extensions/，开启「开发者模式」。
+Edge 商店上架准备中，目前可使用源码或 GitHub 安装包。
+
+1. 从 [GitHub Releases](https://github.com/aredddd/GlassNote/releases) 下载 GlassNote-v版本号.zip 和 SHA256SUMS 并解压；也可下载仓库源码。
+2. Edge 打开 edge://extensions/；Chrome 打开 chrome://extensions/，开启「开发者模式」。
 3. 点击「加载已解压的扩展程序」，选择包含 manifest.json 的目录。
 4. 刷新已打开的网页，选中文字开始标注。
 
@@ -35,6 +42,10 @@
 
 同一文章的普通章节锚点和常见追踪参数不会产生多份笔记；业务查询参数和以 #/、#! 开头的页面路由分别保存。普通 #name 被视为文章章节，如果网站用这种形式承载不同页面，需要注意它们会归入同一页面。
 
+![GlassNote 笔记库](docs/screenshots/library.png)
+
+截图使用项目自编文章和演示笔记，不含真实用户数据。
+
 ## 适用范围
 
 面向普通网页的主文档文本。浏览器内部页面、应用商店、浏览器内置 PDF 阅读器、Canvas 内容、iframe 内文和封闭 Shadow DOM 不在本版支持范围内。可编辑输入区不参与标注。访问本地 HTML 需要在扩展详情中开启「允许访问文件网址」。
@@ -53,15 +64,17 @@
 
 ## 开发与验证
 
-扩展本身无构建步骤、无运行时依赖。测试使用 Node.js 22 和 Playwright。
+扩展本身无构建步骤、无运行时依赖。开发和测试需要 Node.js 22 或更新版本及 npm，打包无需额外构建工具。CI 使用 Node.js 24 和 Playwright。使用扩展无需安装这些开发工具。
 
 ```sh
 npm ci
 npx playwright install chromium
 npm run check
+npm run format:check
 npm test
 npm run test:e2e
 npm run package
+npm run package:verify
 ```
 
 可选运行指定真实站点的验收（需要联网）：
@@ -72,7 +85,7 @@ npm run test:live
 
 该测试在临时浏览器配置中访问小林笔记的 Agent 专栏，结果和截图默认保存在 test-results。可用 GN_SCREENSHOT_DIR 指定输出目录。它不读取或修改个人 Chrome 配置。
 
-安装包生成在 dist/GlassNote-v3.0.0.zip。测试使用独立的临时浏览器配置，不读取个人浏览器数据。
+Linux 首次安装测试浏览器时使用 npx playwright install --with-deps chromium。安装包生成在 dist/GlassNote-v版本号.zip，同目录生成 SHA256SUMS。打包只包含扩展文件及许可证、隐私与第三方说明，不包含 node_modules、测试和个人数据。测试使用独立的临时浏览器配置，不读取个人浏览器数据。
 
 ```text
 src/
@@ -85,4 +98,14 @@ styles/        网页高亮样式
 tests/         存储、锚点与真实扩展回归
 ```
 
-目前未指定开源许可证。
+## 参与和发布
+
+- [贡献指南](CONTRIBUTING.md)：开发流程、回归要求和 PR 约定。
+- [问题反馈](https://github.com/aredddd/GlassNote/issues/new/choose)：Bug 报告和功能建议。
+- [安全政策](SECURITY.md)：通过私密渠道报告漏洞。
+- [更新日志](CHANGELOG.md)与[版本发布流程](docs/RELEASING.md)。
+- [贡献者](CONTRIBUTORS.md)。
+
+## 许可
+
+本项目采用 [MIT 许可证](LICENSE)，版权归 aredddd 及项目贡献者所有。开发工具、浏览器和测试网站的许可边界见[第三方声明](THIRD_PARTY_NOTICES.md)。

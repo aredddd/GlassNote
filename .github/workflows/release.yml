@@ -1,0 +1,104 @@
+name: 发布扩展
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 校验标签、测试并构建
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: 检出标签源码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: 校验标签和项目版本
+        run: node scripts/verify-package.cjs --version-only --tag "$GITHUB_REF_NAME"
+
+      - name: 按锁文件安装开发依赖
+        run: npm ci
+
+      - name: 检查语法、扩展入口和格式
+        run: |
+          npm run check
+          npm run format:check
+
+      - name: 安装测试浏览器
+        run: npx playwright install --with-deps chromium
+
+      - name: 运行单元测试和真实扩展回归
+        run: |
+          npm test
+          npm run test:e2e
+
+      - name: 构建并验证 ZIP 与 SHA256SUMS
+        run: |
+          npm run package -- --tag "$GITHUB_REF_NAME"
+          npm run package:verify -- --tag "$GITHUB_REF_NAME"
+
+      - name: 保存经过校验的发布资产
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: glassnote-release
+          path: |
+            dist/GlassNote-${{ github.ref_name }}.zip
+            dist/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: 发布 GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: 检出同一标签的校验脚本和发布说明
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+
+      - name: 下载本次构建的发布资产
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: glassnote-release
+          path: dist
+
+      - name: 发布前复验版本、文件清单和 SHA-256
+        run: node scripts/verify-package.cjs --tag "$GITHUB_REF_NAME"
+
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          archive="dist/GlassNote-${GITHUB_REF_NAME}.zip"
+          title="GlassNote ${GITHUB_REF_NAME#v}"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo '::error::该标签已经存在 Release，拒绝覆盖已发布资产；请使用新版本。'
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" "$archive" dist/SHA256SUMS --verify-tag --target "$GITHUB_SHA" --title "$title" --notes-file CHANGELOG.md --draft=false --prerelease=false

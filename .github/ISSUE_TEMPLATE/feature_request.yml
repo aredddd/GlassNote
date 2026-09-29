@@ -1,0 +1,39 @@
+name: 功能建议
+description: 说明阅读或整理笔记时遇到的问题与希望改进的行为
+title: '[建议] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请从具体使用场景出发。涉及私人文章或笔记时，请使用虚构示例；安全问题请走[私密报告](https://github.com/aredddd/GlassNote/security/advisories/new)。
+  - type: checkboxes
+    id: preparation
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已查看现有功能说明并搜索已有 Issue。
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到了什么问题？
+      description: 描述阅读、标注、恢复或整理笔记时的具体场景，以及现有操作为什么不方便。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望怎样改进？
+      description: 用一次实际操作说明希望看到的行为或结果。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 现有做法与替代方案
+      description: 如果已有临时解决办法，也请说明它的限制。
+  - type: textarea
+    id: scope
+    attributes:
+      label: 其他说明
+      description: 可附脱敏示意图。若涉及同步、网络服务或新增权限，请说明这些能力为什么是该场景所必需的。

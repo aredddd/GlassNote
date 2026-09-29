@@ -8,12 +8,26 @@
     "test:e2e": "node --test tests/extension.e2e.cjs",
     "test:live": "node tests/live-site.cjs",
     "check": "node scripts/check.cjs",
-    "format": "prettier --write src styles scripts tests manifest.json package.json README.md",
-    "format:check": "prettier --check src styles scripts tests manifest.json package.json README.md",
-    "package": "node scripts/package.cjs"
+    "format": "prettier --write src styles scripts tests .github docs manifest.json package.json package-lock.json \"*.md\"",
+    "format:check": "prettier --check src styles scripts tests .github docs manifest.json package.json package-lock.json \"*.md\"",
+    "package": "node scripts/package.cjs",
+    "package:verify": "node scripts/verify-package.cjs"
   },
   "devDependencies": {
     "playwright": "1.63.0",
     "prettier": "3.9.9"
+  },
+  "license": "MIT",
+  "author": "aredddd",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aredddd/GlassNote.git"
+  },
+  "homepage": "https://github.com/aredddd/GlassNote#readme",
+  "bugs": {
+    "url": "https://github.com/aredddd/GlassNote/issues"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

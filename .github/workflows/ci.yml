@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: 格式、单元测试与真实扩展回归
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: 按锁文件安装开发依赖
+        run: npm ci
+
+      - name: 检查语法、扩展入口和格式
+        run: |
+          npm run check
+          npm run format:check
+
+      - name: 安装测试浏览器
+        run: npx playwright install --with-deps chromium
+
+      - name: 运行单元测试
+        run: npm test
+
+      - name: 运行真实扩展回归
+        run: npm run test:e2e
+
+      # 测试使用隔离浏览器与本地网页，不自动访问用户指定的真实网站。
+      - name: 构建并验证发布包
+        run: |
+          npm run package
+          npm run package:verify
+
+      - name: 保留失败时的测试截图
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: failed-test-screenshots
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7

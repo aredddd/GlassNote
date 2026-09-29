@@ -1,99 +1,99 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GlassNote</title>
-  <link rel="stylesheet" href="popup.css">
-</head>
-<body>
-  <div class="popup-container">
-    <!-- 头部 -->
-    <div class="popup-header">
-      <div class="logo">
-        <span class="logo-icon">🔍</span>
-        <h1 class="logo-text">GlassNote</h1>
-      </div>
-      <div class="version">v0.1.0</div>
-    </div>
-
-    <!-- 功能开关 -->
-    <div class="feature-toggle">
-      <div class="toggle-item">
-        <span class="toggle-label">启用标注功能</span>
-        <label class="switch">
-          <input type="checkbox" id="enableToggle" checked>
-          <span class="slider"></span>
-        </label>
-      </div>
-    </div>
-
-    <!-- 快速功能按钮 -->
-    <div class="quick-actions">
-      <h3>快速操作</h3>
-      <div class="action-buttons">
-        <button class="action-btn highlight-btn" data-action="highlight">
-          <span class="btn-icon">🖍️</span>
-          <span class="btn-text">高亮模式</span>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GlassNote</title>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header class="popup-header">
+        <a
+          class="brand"
+          href="../library/library.html"
+          id="brandLink"
+          aria-label="打开 GlassNote 笔记库"
+        >
+          <span class="brand-mark" aria-hidden="true"
+            ><svg viewBox="0 0 32 32">
+              <path d="M9 6h13a3 3 0 0 1 3 3v17H12a5 5 0 0 1-5-5V8a2 2 0 0 1 2-2Z" />
+              <path d="M12 6v20M16 12h5M16 16h5M16 20h3" /></svg
+          ></span>
+          <span>GlassNote</span>
+        </a>
+        <button class="icon-button" id="settingsBtn" aria-label="设置" title="设置">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="m9.5 4 .8-2h3.4l.8 2 2 .9 2.2-.3 1.7 2.9-1.3 1.8.1 2.3 1.3 1.9-1.7 2.9-2.3-.2-2 .9-.8 2h-3.4l-.8-2-2-.9-2.2.2-1.7-2.9L5 13.6l-.1-2.3-1.3-1.8 1.7-2.9 2.3.3Z"
+              transform="translate(0 1)"
+            />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
         </button>
-        <button class="action-btn note-btn" data-action="note">
-          <span class="btn-icon">📝</span>
-          <span class="btn-text">便利贴模式</span>
+      </header>
+      <section class="page-card glass" aria-labelledby="pageTitle">
+        <div class="page-meta">
+          <span class="live-dot" id="pageDot"></span><span id="pageDomain">正在读取当前页面</span
+          ><span class="page-label">当前页面</span>
+        </div>
+        <h1 id="pageTitle"></h1>
+        <div class="page-status">
+          <span id="pageStatus">正在读取已保存的笔记…</span
+          ><svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="m7 12 3 3 7-7" />
+            <path d="M20 12v7H4V5h12" />
+          </svg>
+        </div>
+      </section>
+      <div class="enable-row">
+        <div>
+          <span class="row-title">网页标注</span>
+        </div>
+        <label class="switch"
+          ><input id="enableToggle" type="checkbox" checked aria-label="启用网页标注" /><span></span
+        ></label>
+      </div>
+      <section class="quick-actions" aria-label="标注操作">
+        <button class="button primary" id="highlightBtn">
+          <svg viewBox="0 0 24 24">
+            <path d="m9 14 7-10 4 3-7 10-4-3ZM9 14l-3 3 4 3 3-3M4 21h9" /></svg
+          >开始标注<span class="button-arrow">↗</span>
         </button>
-        <button class="action-btn clear-btn" data-action="clear">
-          <span class="btn-icon">🧹</span>
-          <span class="btn-text">清除标注</span>
+        <button class="button secondary" id="noteBtn">
+          <svg viewBox="0 0 24 24"><path d="M13 4H5v16h14v-8M11 13l1-4 6-6 3 3-6 6-4 1Z" /></svg
+          >写笔记
         </button>
-      </div>
-    </div>
-
-    <!-- 统计信息 -->
-    <div class="stats-section">
-      <h3>当前页面统计</h3>
-      <div class="stats-grid">
-        <div class="stat-item">
-          <div class="stat-number" id="highlightCount">0</div>
-          <div class="stat-label">高亮标记</div>
+      </section>
+      <section class="stats" aria-label="当前页面统计">
+        <div><strong id="highlightCount">—</strong><span>处标注</span></div>
+        <div><strong id="noteCount">—</strong><span>条笔记</span></div>
+        <button id="pageNotesBtn">
+          <strong id="totalCount">—</strong
+          ><span
+            >查看本页<svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" /></svg
+          ></span>
+        </button>
+      </section>
+      <section class="recent-section" aria-labelledby="recentHeading">
+        <div class="section-heading">
+          <h2 id="recentHeading">最近留下的想法</h2>
+          <span id="recentCount"></span>
         </div>
-        <div class="stat-item">
-          <div class="stat-number" id="noteCount">0</div>
-          <div class="stat-label">便利贴</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-number" id="totalCount">0</div>
-          <div class="stat-label">总标注数</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 快捷键说明 -->
-    <div class="shortcuts-section">
-      <h3>快捷键</h3>
-      <div class="shortcut-list">
-        <div class="shortcut-item">
-          <span class="shortcut-key">Ctrl + Shift + G</span>
-          <span class="shortcut-desc">切换标注显示</span>
-        </div>
-        <div class="shortcut-item">
-          <span class="shortcut-key">选中文本</span>
-          <span class="shortcut-desc">显示标注工具栏</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 底部链接 -->
-    <div class="popup-footer">
-      <div class="footer-links">
-        <a href="#" id="exportBtn">导出数据</a>
-        <a href="#" id="settingsBtn">设置</a>
-        <a href="https://github.com/aredddd/GlassNote" target="_blank">GitHub</a>
-      </div>
-      <div class="footer-copyright">
-        © 2024 GlassNote
-      </div>
-    </div>
-  </div>
-
-  <script src="popup.js"></script>
-</body>
+        <div id="recentNotes" class="recent-notes"><p class="loading-text">正在整理笔记…</p></div>
+      </section>
+      <footer class="popup-footer">
+        <button id="libraryBtn" class="library-link">
+          <span class="library-icon"
+            ><svg viewBox="0 0 24 24"><path d="M4 4h4v16H4zM11 4h4v16h-4zM18 4l3 15" /></svg></span
+          ><span>打开笔记库</span
+          ><svg class="footer-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
+        </button>
+      </footer>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script src="../shared/store.js"></script>
+    <script src="popup.js"></script>
+  </body>
 </html>

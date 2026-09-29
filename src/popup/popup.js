@@ -1,403 +1,201 @@
-/**
- * GlassNote 弹窗脚本
- * 处理扩展弹窗的用户交互和数据显示
- */
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const typeNames = { highlight: '高亮', underline: '下划线', bold: '加粗', note: '笔记' };
+  let currentTab = null;
+  let page = null;
+  let supported = false;
+  let refreshId = 0;
+  let toastTimer;
 
-class GlassNotePopup {
-  constructor() {
-    this.currentTab = null;
-    this.init();
+  function toast(message, error = false) {
+    $('toast').textContent = message;
+    $('toast').classList.toggle('error', error);
+    $('toast').hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      $('toast').hidden = true;
+    }, 3600);
   }
-
-  /**
-   * 初始化弹窗
-   */
-  async init() {
-    await this.getCurrentTab();
-    this.setupEventListeners();
-    await this.loadStats();
-    await this.loadSettings();
+  function openLibrary(settings = false) {
+    return chrome.tabs.create({
+      url: chrome.runtime.getURL(`src/library/library.html${settings ? '#settings' : ''}`),
+    });
   }
-
-  /**
-   * 获取当前活动标签页
-   */
-  async getCurrentTab() {
+  function isSupported(url) {
     try {
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      this.currentTab = tabs[0];
+      const u = new URL(url);
+      return (
+        ['https:', 'http:', 'file:'].includes(u.protocol) &&
+        u.hostname !== 'chromewebstore.google.com' &&
+        !(u.hostname === 'chrome.google.com' && u.pathname.startsWith('/webstore'))
+      );
+    } catch {
+      return false;
+    }
+  }
+  async function send(message) {
+    if (!supported || !currentTab?.id)
+      throw new Error('此页面无法标注，仍可在笔记库查看已保存的内容');
+    let response;
+    try {
+      response = await chrome.tabs.sendMessage(currentTab.id, message);
     } catch (error) {
-      console.error('获取当前标签页失败:', error);
-    }
-  }
-
-  /**
-   * 安全发送消息到content script
-   */
-  async sendMessageSafely(message, retries = 1) {
-    if (!this.currentTab) {
-      console.warn('没有活动标签页');
-      return false;
-    }
-
-    // 检查URL是否支持content script
-    const unsupportedProtocols = ['chrome:', 'chrome-extension:', 'moz-extension:', 'edge:', 'about:', 'file:'];
-    const url = this.currentTab.url || '';
-    
-    if (unsupportedProtocols.some(protocol => url.startsWith(protocol))) {
-      this.showToast('此页面不支持标注功能');
-      return false;
-    }
-
-    // 检查标签页状态
-    if (this.currentTab.status !== 'complete') {
-      this.showToast('页面还在加载中，请稍后再试');
-      return false;
-    }
-
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        await chrome.tabs.sendMessage(this.currentTab.id, message);
-        return true;
-      } catch (error) {
-        console.error(`发送消息失败 (尝试 ${attempt + 1}/${retries + 1}):`, error);
-        
-        // 如果是最后一次尝试，显示错误信息
-        if (attempt === retries) {
-          if (error.message.includes('Could not establish connection') || 
-              error.message.includes('Receiving end does not exist')) {
-            
-            // 尝试注入content script
-            const injected = await this.tryInjectContentScript();
-            if (injected) {
-              this.showToast('正在初始化标注系统，请稍后再试');
-            } else {
-              this.showToast('页面不支持标注功能或需要刷新页面');
-            }
-          } else {
-            this.showToast('操作失败，请重试');
-          }
-          return false;
-        }
-        
-        // 等待一段时间后重试
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-    }
-    
-    return false;
-  }
-
-  /**
-   * 尝试注入content script
-   */
-  async tryInjectContentScript() {
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: this.currentTab.id },
-        files: ['src/content/content.js']
-      });
-      
+      if (!/Receiving end does not exist|Could not establish connection/i.test(error.message || ''))
+        throw error;
       await chrome.scripting.insertCSS({
-        target: { tabId: this.currentTab.id },
-        files: ['styles/content.css']
+        target: { tabId: currentTab.id },
+        files: ['styles/content.css'],
       });
-      
-      return true;
+      await chrome.scripting.executeScript({
+        target: { tabId: currentTab.id },
+        files: ['src/shared/anchor.js', 'src/shared/store.js', 'src/content/content.js'],
+      });
+      response = await chrome.tabs.sendMessage(currentTab.id, message);
+    }
+    if (!response?.success) throw new Error(response?.error || '网页未响应，请刷新页面后重试');
+    return response;
+  }
+  async function perform(button, message) {
+    button.disabled = true;
+    try {
+      await send(message);
+      window.close();
     } catch (error) {
-      console.error('注入content script失败:', error);
-      return false;
+      toast(error.message || '操作失败，请重试', true);
+    } finally {
+      button.disabled = !supported;
     }
   }
-
-  /**
-   * 设置事件监听器
-   */
-  setupEventListeners() {
-    // 功能开关
-    const enableToggle = document.getElementById('enableToggle');
-    enableToggle.addEventListener('change', (e) => {
-      this.toggleFeature(e.target.checked);
-    });
-
-    // 快速操作按钮
-    document.querySelectorAll('.action-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const action = btn.getAttribute('data-action');
-        this.handleAction(action);
+  function renderRecent(annotations) {
+    const holder = $('recentNotes');
+    holder.replaceChildren();
+    document.querySelector('.recent-section').hidden = !annotations.length;
+    $('recentCount').textContent = annotations.length ? `${annotations.length} 条已保存` : '';
+    if (!annotations.length) return;
+    [...annotations]
+      .sort(
+        (a, b) =>
+          (Number(new Date(b.updatedAt || b.createdAt)) || 0) -
+          (Number(new Date(a.updatedAt || a.createdAt)) || 0),
+      )
+      .slice(0, 2)
+      .forEach((annotation) => {
+        const item = document.createElement('button');
+        item.className = `recent-item color-${['yellow', 'green', 'blue', 'pink'].includes(annotation.color) ? annotation.color : 'yellow'}`;
+        const quote = document.createElement('p');
+        quote.textContent = annotation.content || annotation.text || '未填写内容的笔记';
+        const meta = document.createElement('small');
+        const date = new Date(annotation.updatedAt || annotation.createdAt);
+        meta.textContent = `${typeNames[annotation.type] || '标注'} · ${Number.isNaN(+date) ? '已保存' : new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(date)}`;
+        item.append(quote, meta);
+        item.addEventListener('click', () =>
+          supported
+            ? perform(item, { action: 'focusAnnotation', id: annotation.id })
+            : chrome.tabs.create({
+                url: chrome.runtime.getURL(
+                  `src/library/library.html?page=${encodeURIComponent(page.url)}&note=${encodeURIComponent(annotation.id)}`,
+                ),
+              }),
+        );
+        holder.append(item);
       });
-    });
-
-    // 底部链接
-    document.getElementById('exportBtn').addEventListener('click', (e) => {
-      e.preventDefault();
-      this.exportData();
-    });
-
-    document.getElementById('settingsBtn').addEventListener('click', (e) => {
-      e.preventDefault();
-      this.openSettings();
-    });
   }
-
-  /**
-   * 切换功能开关
-   */
-  async toggleFeature(enabled) {
+  async function refresh() {
+    const id = ++refreshId;
     try {
-      // 保存设置
-      await chrome.storage.sync.set({ enabled: enabled });
-      
-      // 向内容脚本发送消息
-      const success = await this.sendMessageSafely({
-        action: 'toggle',
-        enabled: enabled
-      });
-
-      if (success) {
-        console.log(`GlassNote ${enabled ? '已启用' : '已禁用'}`);
+      const storable = /^(https?|file):/.test(currentTab?.url || '');
+      const [savedPage, settings] = await Promise.all([
+        storable ? GNStore.getPage(currentTab.url) : null,
+        GNStore.getSettings(),
+      ]);
+      if (id !== refreshId) return;
+      page = savedPage;
+      const annotations = page?.annotations || [];
+      $('enableToggle').checked = settings.enabled;
+      $('highlightCount').textContent = annotations.filter((a) => a.type !== 'note').length;
+      $('noteCount').textContent = annotations.filter(
+        (a) => a.type === 'note' || a.content?.trim(),
+      ).length;
+      $('totalCount').textContent = annotations.length;
+      $('pageStatus').textContent = supported
+        ? annotations.length
+          ? `${annotations.length} 条内容已保存在此浏览器`
+          : ''
+        : '浏览器系统页不支持标注，可打开笔记库';
+      document.querySelector('.page-status').hidden = !$('pageStatus').textContent;
+      renderRecent(annotations);
+    } catch (error) {
+      $('pageStatus').textContent = '笔记读取失败，请重试';
+      document.querySelector('.page-status').hidden = false;
+      document.querySelector('.recent-section').hidden = false;
+      $('recentNotes').replaceChildren();
+      const retry = document.createElement('button');
+      retry.className = 'button secondary';
+      retry.textContent = '重新读取笔记';
+      retry.addEventListener('click', refresh);
+      $('recentNotes').append(retry);
+      toast(error.message || '读取失败', true);
+    }
+  }
+  async function init() {
+    $('libraryBtn').addEventListener('click', () => openLibrary());
+    $('brandLink').addEventListener('click', (event) => {
+      event.preventDefault();
+      openLibrary();
+    });
+    $('settingsBtn').addEventListener('click', () => openLibrary(true));
+    $('highlightBtn').addEventListener('click', () =>
+      perform($('highlightBtn'), { action: 'setMode', mode: 'highlight' }),
+    );
+    $('noteBtn').addEventListener('click', () =>
+      perform($('noteBtn'), { action: 'setMode', mode: 'note' }),
+    );
+    $('pageNotesBtn').addEventListener('click', () =>
+      supported ? perform($('pageNotesBtn'), { action: 'openPanel' }) : openLibrary(),
+    );
+    $('enableToggle').addEventListener('change', async (event) => {
+      const input = event.target;
+      input.disabled = true;
+      try {
+        await GNStore.setSettings({ enabled: input.checked });
+        if (supported) await send({ action: 'toggle', enabled: input.checked });
+        await refresh();
+      } catch (error) {
+        await refresh();
+        toast(`当前页未完成更新：${error.message}`, true);
+      } finally {
+        input.disabled = false;
+      }
+    });
+    chrome.storage.onChanged.addListener(() => {
+      refresh();
+    });
+    try {
+      [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      supported = isSupported(currentTab?.url);
+      $('pageTitle').textContent = currentTab?.title || '当前页面';
+      try {
+        $('pageDomain').textContent = new URL(currentTab.url).hostname || '浏览器页面';
+      } catch {
+        $('pageDomain').textContent = '浏览器页面';
+      }
+      $('pageDot').classList.toggle('unavailable', !supported);
+      $('highlightBtn').disabled = !supported;
+      $('noteBtn').disabled = !supported;
+      await refresh();
+      if (supported && page?.annotations?.length) {
+        try {
+          const status = await send({ action: 'getStatus' });
+          if (status.unresolved > 0)
+            $('pageStatus').textContent = `${status.unresolved} 条待重新定位 · 内容仍保存在笔记库`;
+        } catch {
+          $('pageStatus').textContent = '内容已保存 · 页面连接待恢复，可刷新后重试';
+        }
       }
     } catch (error) {
-      console.error('切换功能失败:', error);
-      this.showToast('设置保存失败');
+      toast(error.message || '无法读取当前页面', true);
     }
   }
-
-  /**
-   * 处理快速操作
-   */
-  async handleAction(action) {
-    if (!this.currentTab) return;
-
-    try {
-      switch (action) {
-        case 'highlight':
-          // 激活高亮模式
-          const highlightSuccess = await this.sendMessageSafely({
-            action: 'setMode',
-            mode: 'highlight'
-          });
-          if (highlightSuccess) {
-            this.showToast('高亮模式已激活');
-          }
-          break;
-
-        case 'note':
-          // 激活便利贴模式
-          const noteSuccess = await this.sendMessageSafely({
-            action: 'setMode',
-            mode: 'note'
-          });
-          if (noteSuccess) {
-            this.showToast('便利贴模式已激活');
-          }
-          break;
-
-        case 'clear':
-          // 清除当前页面的所有标注
-          if (confirm('确定要清除当前页面的所有标注吗？此操作不可撤销。')) {
-            await this.clearAnnotations();
-            this.showToast('标注已清除');
-          }
-          break;
-      }
-    } catch (error) {
-      console.error('操作失败:', error);
-      this.showToast('操作失败，请重试');
-    }
-  }
-
-  /**
-   * 清除标注
-   */
-  async clearAnnotations() {
-    if (!this.currentTab) return;
-
-    try {
-      // 从存储中删除当前页面的数据
-      const url = this.currentTab.url;
-      await chrome.storage.local.remove([url]);
-
-      // 通知内容脚本清除显示的标注
-      await this.sendMessageSafely({
-        action: 'clearAll'
-      });
-
-      // 刷新统计数据
-      await this.loadStats();
-    } catch (error) {
-      console.error('清除标注失败:', error);
-    }
-  }
-
-  /**
-   * 加载统计数据
-   */
-  async loadStats() {
-    if (!this.currentTab) return;
-
-    try {
-      const url = this.currentTab.url;
-      const result = await chrome.storage.local.get([url]);
-      const pageData = result[url];
-
-      let highlightCount = 0;
-      let noteCount = 0;
-      let totalCount = 0;
-
-      // 支持新旧数据格式
-      const annotations = pageData?.annotations || pageData?.elements || [];
-      
-      annotations.forEach(element => {
-        if (element.type === 'note') {
-          noteCount++;
-        } else {
-          highlightCount++;
-        }
-        totalCount++;
-      });
-
-      // 更新显示
-      document.getElementById('highlightCount').textContent = highlightCount;
-      document.getElementById('noteCount').textContent = noteCount;
-      document.getElementById('totalCount').textContent = totalCount;
-
-    } catch (error) {
-      console.error('加载统计数据失败:', error);
-      // 出错时显示0
-      document.getElementById('highlightCount').textContent = '0';
-      document.getElementById('noteCount').textContent = '0';
-      document.getElementById('totalCount').textContent = '0';
-    }
-  }
-
-  /**
-   * 加载设置
-   */
-  async loadSettings() {
-    try {
-      const result = await chrome.storage.sync.get(['enabled']);
-      const enabled = result.enabled !== undefined ? result.enabled : true;
-      
-      document.getElementById('enableToggle').checked = enabled;
-    } catch (error) {
-      console.error('加载设置失败:', error);
-    }
-  }
-
-  /**
-   * 导出数据
-   */
-  async exportData() {
-    try {
-      // 获取所有存储的数据
-      const allData = await chrome.storage.local.get(null);
-      
-      // 过滤出页面数据并确保数据格式一致
-      const pageData = {};
-      Object.keys(allData).forEach(key => {
-        if (key.startsWith('http')) {
-          const data = allData[key];
-          // 统一数据格式：如果有elements字段，转换为annotations
-          if (data.elements && !data.annotations) {
-            data.annotations = data.elements;
-            delete data.elements;
-          }
-          pageData[key] = data;
-        }
-      });
-
-      // 创建导出数据
-      const exportData = {
-        version: '2.0.0',
-        exportTime: new Date().toISOString(),
-        architecture: 'DOM内联标注系统',
-        totalPages: Object.keys(pageData).length,
-        totalAnnotations: Object.values(pageData).reduce((total, page) => 
-          total + (page.annotations ? page.annotations.length : 0), 0),
-        data: pageData
-      };
-
-      // 下载文件
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: 'application/json'
-      });
-      
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `glassnote-v2-export-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      
-      URL.revokeObjectURL(url);
-      
-      this.showToast(`已导出 ${exportData.totalPages} 个页面的标注数据`);
-    } catch (error) {
-      console.error('导出数据失败:', error);
-      this.showToast('导出失败，请重试');
-    }
-  }
-
-  /**
-   * 打开设置页面
-   */
-  openSettings() {
-    // 未来可以打开一个设置页面
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('src/options/options.html')
-    });
-  }
-
-  /**
-   * 显示提示消息
-   */
-  showToast(message) {
-    // 创建简单的toast提示
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      background: #333;
-      color: white;
-      padding: 8px 12px;
-      border-radius: 4px;
-      font-size: 12px;
-      z-index: 10000;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    `;
-    toast.textContent = message;
-    
-    document.body.appendChild(toast);
-    
-    // 显示动画
-    setTimeout(() => {
-      toast.style.opacity = '1';
-    }, 10);
-    
-    // 自动隐藏
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.remove();
-        }
-      }, 300);
-    }, 2000);
-  }
-}
-
-// 当弹窗加载完成时初始化
-document.addEventListener('DOMContentLoaded', () => {
-  new GlassNotePopup();
-});
-
-// 监听存储变化，实时更新统计
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'local') {
-    // 重新加载统计数据
-    const popup = new GlassNotePopup();
-    popup.loadStats();
-  }
-});
+  init();
+})();

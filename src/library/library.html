@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>笔记库 · GlassNote</title>
+    <link rel="stylesheet" href="../popup/theme.css" />
+    <link rel="stylesheet" href="library.css" />
+  </head>
+  <body>
+    <svg class="svg-definitions" aria-hidden="true">
+      <defs>
+        <symbol id="i-book" viewBox="0 0 24 24">
+          <path d="M3 4h7l2 2 2-2h7v16h-7l-2 1-2-1H3zM12 6v15" />
+        </symbol>
+        <symbol id="i-note" viewBox="0 0 24 24">
+          <path d="M13 4H5v16h14v-8M11 13l1-4 6-6 3 3-6 6-4 1Z" />
+        </symbol>
+        <symbol id="i-mark" viewBox="0 0 24 24">
+          <path d="m9 14 7-10 4 3-7 10-4-3ZM9 14l-3 3 4 3 3-3M4 21h9" />
+        </symbol>
+        <symbol id="i-page" viewBox="0 0 24 24">
+          <path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M9 12h6M9 16h5" />
+        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5" /></symbol>
+        <symbol id="i-external" viewBox="0 0 24 24">
+          <path d="M13 4h7v7M20 4l-9 9M9 4H4v16h16v-5" />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 24 24">
+          <path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" />
+        </symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24">
+          <path d="M12 16V4m-5 5 5-5 5 5M4 16v5h16v-5" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24">
+          <path d="M4 7h16M4 17h16M9 4v6M16 14v6" />
+        </symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24">
+          <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6" /></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 5 5" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></symbol>
+      </defs>
+    </svg>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="library.html" aria-label="GlassNote 笔记库"
+          ><span class="brand-mark"
+            ><svg viewBox="0 0 32 32">
+              <path d="M9 6h13a3 3 0 0 1 3 3v17H12a5 5 0 0 1-5-5V8a2 2 0 0 1 2-2Z" />
+              <path d="M12 6v20M16 12h5M16 16h5M16 20h3" /></svg></span
+          ><span>GlassNote</span></a
+        >
+        <nav class="main-nav" aria-label="笔记分类">
+          <button data-view="all" class="nav-item active">
+            <svg><use href="#i-book" /></svg><span>全部笔记</span
+            ><span class="nav-count" id="allCount">0</span>
+          </button>
+          <button data-view="marks" class="nav-item">
+            <svg><use href="#i-mark" /></svg><span>文字标注</span
+            ><span class="nav-count" id="marksCount">0</span>
+          </button>
+          <button data-view="notes" class="nav-item">
+            <svg><use href="#i-note" /></svg><span>我的想法</span
+            ><span class="nav-count" id="notesCount">0</span>
+          </button>
+        </nav>
+        <div class="sidebar-section-label pages-label">
+          <span>阅读页面</span><span id="pageCount">0</span>
+        </div>
+        <nav class="page-nav" id="pageNav" aria-label="按网页浏览"></nav>
+        <div class="sidebar-bottom">
+          <button class="nav-item" id="importBtn">
+            <svg><use href="#i-upload" /></svg><span>导入备份</span></button
+          ><button class="nav-item" id="settingsBtn">
+            <svg><use href="#i-settings" /></svg><span>偏好设置</span
+            ><span class="version">v3.0</span>
+          </button>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="main-header">
+          <div>
+            <h1 id="viewTitle">全部笔记</h1>
+          </div>
+          <button class="button secondary" id="exportBtn">
+            <svg><use href="#i-download" /></svg>导出笔记
+          </button>
+        </header>
+        <section class="overview" aria-label="笔记统计">
+          <div><strong id="statAnnotations">—</strong><span>条阅读记录</span></div>
+          <span class="overview-divider"></span>
+          <div><strong id="statPages">—</strong><span>个页面</span></div>
+          <div class="overview-caption">
+            <svg><use href="#i-check" /></svg><span id="storageStatus">正在读取本地笔记</span>
+          </div>
+        </section>
+        <div id="errorBanner" class="error-banner" role="alert" hidden>
+          <span id="errorMessage"></span
+          ><button class="button secondary" id="retryBtn">重新读取</button>
+        </div>
+        <section class="workspace glass" aria-label="笔记工作区">
+          <div class="list-pane">
+            <div class="list-controls">
+              <label class="search"
+                ><svg><use href="#i-search" /></svg
+                ><input
+                  id="searchInput"
+                  type="search"
+                  placeholder="搜索文字、想法或页面…"
+                  aria-label="搜索笔记"
+                /><kbd>/</kbd></label
+              >
+              <div class="filter-row">
+                <span id="resultCount">正在读取…</span
+                ><label class="color-filter"
+                  ><span class="sr-only">按标注颜色筛选</span
+                  ><select id="colorFilter">
+                    <option value="all">全部颜色</option>
+                    <option value="yellow">暖阳黄</option>
+                    <option value="green">鼠尾草绿</option>
+                    <option value="blue">雾霭蓝</option>
+                    <option value="pink">蔷薇粉</option>
+                  </select></label
+                ><label
+                  ><span class="sr-only">排序</span
+                  ><select id="sortOrder">
+                    <option value="newest">最近更新</option>
+                    <option value="oldest">最早记录</option>
+                  </select></label
+                >
+              </div>
+            </div>
+            <div id="noteList" class="note-list">
+              <div class="list-loading"><span></span>正在找回你的阅读记录…</div>
+            </div>
+          </div>
+          <section class="detail-pane" id="detailPane" aria-label="笔记详情">
+            <div id="detailEmpty" class="detail-empty">
+              <div class="empty-art" aria-hidden="true">
+                <div class="art-leaf leaf-one"></div>
+                <div class="art-leaf leaf-two"></div>
+                <div class="art-paper">
+                  <svg viewBox="0 0 80 100">
+                    <path d="M18 24h42M18 35h34M18 46h42M18 57h25M18 76h16" />
+                    <path d="M16 33h40" stroke="#d9c889" stroke-width="8" opacity=".55" />
+                  </svg>
+                </div>
+                <span class="art-spark">✦</span>
+              </div>
+            </div>
+            <article class="note-detail" id="noteDetail" hidden>
+              <div class="detail-topbar">
+                <button id="backToList" class="button secondary mobile-back">返回列表</button>
+                <div class="detail-kind">
+                  <span id="detailColorDot" class="color-dot color-yellow"></span
+                  ><span id="detailType">文字标注</span>
+                </div>
+                <div class="detail-top-actions">
+                  <button
+                    class="icon-button"
+                    id="copyBtn"
+                    aria-label="复制笔记内容"
+                    title="复制内容"
+                  >
+                    <svg viewBox="0 0 24 24"><path d="M9 8h11v13H9zM15 8V3H4v13h5" /></svg></button
+                  ><button
+                    class="icon-button delete-button"
+                    id="deleteBtn"
+                    aria-label="删除这条笔记"
+                    title="删除笔记"
+                  >
+                    <svg><use href="#i-trash" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="detail-body">
+                <div class="source-label">
+                  <svg><use href="#i-page" /></svg><span id="detailDomain"></span
+                  ><span class="source-separator">·</span><time id="detailDate"></time>
+                </div>
+                <h2 id="detailPageTitle"></h2>
+                <button id="openSourceBtn" class="source-link">
+                  回到原网页<svg><use href="#i-external" /></svg>
+                </button>
+                <div id="quoteSection" class="quote-section color-yellow">
+                  <span class="quote-symbol" aria-hidden="true">“</span>
+                  <blockquote id="detailQuote"></blockquote>
+                </div>
+                <div class="note-editor">
+                  <label for="noteContent"
+                    ><svg><use href="#i-note" /></svg>我的想法<span id="unsavedLabel" hidden
+                      >有未保存的修改</span
+                    ></label
+                  ><textarea id="noteContent" rows="6" maxlength="100000"></textarea>
+                </div>
+                <div class="edit-footer">
+                  <div class="color-picker" id="noteColors" role="group" aria-label="标注颜色">
+                    <button
+                      class="color-choice color-yellow"
+                      data-color="yellow"
+                      aria-label="暖阳黄"
+                      title="暖阳黄"
+                    ></button
+                    ><button
+                      class="color-choice color-green"
+                      data-color="green"
+                      aria-label="鼠尾草绿"
+                      title="鼠尾草绿"
+                    ></button
+                    ><button
+                      class="color-choice color-blue"
+                      data-color="blue"
+                      aria-label="雾霭蓝"
+                      title="雾霭蓝"
+                    ></button
+                    ><button
+                      class="color-choice color-pink"
+                      data-color="pink"
+                      aria-label="蔷薇粉"
+                      title="蔷薇粉"
+                    ></button>
+                  </div>
+                  <button class="button primary" id="saveBtn" disabled>
+                    <svg><use href="#i-check" /></svg>保存想法
+                  </button>
+                </div>
+                <div class="anchor-notice" id="anchorNotice" hidden>
+                  这条旧笔记缺少原文定位信息。文字已保留，可回到网页重新标注。
+                </div>
+              </div>
+              <footer class="detail-footer">
+                <span id="detailUpdatedAt"></span>
+              </footer>
+            </article>
+          </section>
+        </section>
+      </main>
+    </div>
+    <dialog id="settingsDialog" aria-labelledby="settingsTitle">
+      <form method="dialog" id="settingsForm">
+        <div class="dialog-heading">
+          <div>
+            <h2 id="settingsTitle">偏好设置</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="关闭设置">
+            <svg><use href="#i-close" /></svg>
+          </button>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label for="settingEnabled">启用网页标注</label>
+          </div>
+          <label class="switch"><input id="settingEnabled" type="checkbox" /><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label for="settingRestore">自动恢复标注</label>
+          </div>
+          <label class="switch"><input id="settingRestore" type="checkbox" /><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div>
+            <label for="settingColor">默认标注颜色</label>
+          </div>
+          <select id="settingColor">
+            <option value="yellow">暖阳黄</option>
+            <option value="green">鼠尾草绿</option>
+            <option value="blue">雾霭蓝</option>
+            <option value="pink">蔷薇粉</option>
+          </select>
+        </div>
+        <div class="settings-note">
+          <svg><use href="#i-book" /></svg>
+          <p>
+            所有笔记保存在当前浏览器的本地存储中，不会自动跨设备同步。重装扩展前，请先导出备份。
+          </p>
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary" value="cancel">取消</button
+          ><button class="button primary" id="saveSettingsBtn" type="button">保存设置</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="deleteDialog" aria-labelledby="deleteTitle">
+      <form method="dialog">
+        <div class="dialog-heading">
+          <h2 id="deleteTitle">删除这条笔记？</h2>
+          <button class="icon-button" value="cancel" aria-label="取消">
+            <svg><use href="#i-close" /></svg>
+          </button>
+        </div>
+        <p class="dialog-description">这条记录和网页上的对应标注会被删除。此操作无法撤销。</p>
+        <blockquote id="deletePreview" class="delete-preview"></blockquote>
+        <div class="dialog-actions">
+          <button class="button secondary" value="cancel">保留笔记</button
+          ><button class="button danger" id="confirmDeleteBtn" type="button">删除笔记</button>
+        </div>
+      </form>
+    </dialog>
+    <input id="importFile" type="file" accept="application/json,.json" hidden />
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script src="../shared/store.js"></script>
+    <script src="library.js"></script>
+  </body>
+</html>

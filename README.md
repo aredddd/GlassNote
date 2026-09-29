@@ -49,6 +49,8 @@
 
 权限用于本地存储、当前页控制和在已打开网页中加载标注脚本。网页内容脚本覆盖 http、https 和用户允许的本地文件，不请求历史记录权限。
 
+详细数据处理方式见[隐私说明](https://github.com/aredddd/GlassNote/blob/main/PRIVACY.md)。Edge 商店介绍、权限用途和审核步骤见[发布材料](https://github.com/aredddd/GlassNote/blob/main/docs/EDGE_STORE.md)。
+
 ## 开发与验证
 
 扩展本身无构建步骤、无运行时依赖。测试使用 Node.js 22 和 Playwright。

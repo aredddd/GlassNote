@@ -1,0 +1,82 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "extensionVersion": "3.0.1",
+  "sources": [
+    {
+      "title": "浏览器事件循环：一次点击之后发生了什么",
+      "url": "https://study.demo.test/browser-event-loop",
+      "records": 3
+    },
+    {
+      "title": "雾港来信 · 第七章：没有寄出的信",
+      "url": "https://novel.demo.test/fog-harbor/chapter-7",
+      "records": 3
+    },
+    {
+      "title": "周末出行：轻装徒步清单",
+      "url": "https://life.demo.test/weekend-hiking",
+      "records": 2
+    }
+  ],
+  "verification": [
+    "真实MV3扩展运行",
+    "独立临时配置",
+    "实际工具栏标注与后台持久化",
+    "3来源8条有内容记录",
+    "统一搜索",
+    "按颜色筛选",
+    "JSON导出",
+    "关闭标签页重开同URL自动恢复3条标注",
+    "无页面脚本错误"
+  ],
+  "restoreProof": {
+    "action": "关闭标签页后新建标签页，重新打开同一URL；自动恢复后手动展开页面笔记",
+    "before": {
+      "success": true,
+      "enabled": true,
+      "total": 3,
+      "restored": 3,
+      "unresolved": 0,
+      "url": "https://novel.demo.test/fog-harbor/chapter-7"
+    },
+    "after": {
+      "success": true,
+      "enabled": true,
+      "total": 3,
+      "restored": 3,
+      "unresolved": 0,
+      "url": "https://novel.demo.test/fog-harbor/chapter-7"
+    },
+    "storedRecordsUnchanged": true
+  },
+  "paletteNote": "第二种标注使用3.0.1内置蔷薇粉；未伪造产品不支持的紫色。",
+  "blog": {
+    "entryUrl": "https://xiaolinnote.com/agent/",
+    "pageUrl": "https://xiaolinnote.com/agent/concept/agent.html",
+    "title": "AI Agent 是什么？Agent 面试题万字图解",
+    "selectedText": "今年，AI 圈子里最火的一个词，毫无疑问就是 Agent（智能体）。",
+    "noteText": "学习重点：把 Agent、RAG 和工程方法分开理解。\n下次复习时，从这段导读继续。",
+    "screenshot": "source/blog.png",
+    "size": {
+      "width": 1600,
+      "height": 1000
+    },
+    "status": {
+      "success": true,
+      "enabled": true,
+      "total": 1,
+      "restored": 1,
+      "unresolved": 0,
+      "url": "https://xiaolinnote.com/agent/concept/agent.html"
+    },
+    "verification": [
+      "真实扩展保存高亮及笔记",
+      "刷新后恢复",
+      "原文 DOM 未改动",
+      "仅使用公开可见引言，未修改阅读裁切"
+    ]
+  }
+}

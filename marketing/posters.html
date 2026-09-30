@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>GlassNote 商店海报</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1280px;
+        height: 800px;
+        overflow: hidden;
+      }
+      body {
+        font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        color: #234a3d;
+        -webkit-font-smoothing: antialiased;
+      }
+      .poster {
+        position: relative;
+        width: 1280px;
+        height: 800px;
+        overflow: hidden;
+        background: #f5f7f0 url('source/glass-background.png') center / cover;
+      }
+      .brand {
+        position: absolute;
+        left: 56px;
+        top: 38px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        font:
+          600 31px Georgia,
+          serif;
+        letter-spacing: -0.8px;
+      }
+      .brand img {
+        width: 43px;
+        height: 43px;
+      }
+      .context {
+        position: absolute;
+        right: 56px;
+        top: 46px;
+        font-size: 20px;
+        letter-spacing: 3px;
+        color: #577668;
+      }
+      h1 {
+        position: absolute;
+        margin: 0;
+        left: 56px;
+        top: 122px;
+        font-size: 62px;
+        letter-spacing: -2px;
+        font-weight: 650;
+        line-height: 1.15;
+      }
+      .sub {
+        position: absolute;
+        left: 59px;
+        top: 216px;
+        margin: 0;
+        font-size: 26px;
+        color: #577365;
+        letter-spacing: 0.3px;
+      }
+      .window {
+        position: absolute;
+        overflow: hidden;
+        border: 1px solid #ffffff;
+        background: #fff;
+        border-radius: 20px;
+        box-shadow:
+          0 22px 70px #274c3d22,
+          0 3px 8px #274c3d0a;
+      }
+      .window img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .scene-window {
+        left: 56px;
+        top: 291px;
+        width: 1168px;
+        height: 469px;
+      }
+      .hero h1 {
+        top: 116px;
+        font-size: 65px;
+      }
+      .hero .sub {
+        top: 213px;
+      }
+      .hero .back {
+        left: 56px;
+        top: 315px;
+        width: 850px;
+        height: 423px;
+        transform: rotate(-2deg);
+      }
+      .hero .front {
+        left: 646px;
+        top: 420px;
+        width: 685px;
+        height: 420px;
+        transform: rotate(3deg);
+      }
+      .hero .scene-tag {
+        position: absolute;
+        font-weight: 500;
+        font-size: 23px;
+        background: #fefefadf;
+        border: 1px solid #fff;
+        border-radius: 14px;
+        padding: 13px 22px;
+        box-shadow: 0 8px 24px #264d3f15;
+      }
+      .hero .scene-tag.blog {
+        top: 278px;
+        left: 87px;
+        transform: rotate(-2deg);
+      }
+      .hero .scene-tag.novel {
+        top: 380px;
+        left: 885px;
+        transform: rotate(3deg);
+      }
+      .novel .scene-window {
+        top: 291px;
+      }
+      .collection .scene-window {
+        top: 291px;
+      }
+      .restore h1 {
+        font-size: 61px;
+      }
+      .restore .phase {
+        position: absolute;
+        top: 298px;
+        font-size: 27px;
+        font-weight: 550;
+      }
+      .restore .phase.before {
+        left: 61px;
+      }
+      .restore .phase.after {
+        left: 682px;
+      }
+      .restore .window {
+        top: 354px;
+        width: 543px;
+        height: 339px;
+        border-radius: 18px;
+      }
+      .restore .before-shot {
+        left: 56px;
+      }
+      .restore .after-shot {
+        left: 681px;
+      }
+      .restore .window img {
+        width: 100%;
+        height: auto;
+      }
+      .restore .arrow {
+        position: absolute;
+        top: 492px;
+        left: 617px;
+        font-size: 42px;
+        font-weight: 300;
+        color: #537964;
+      }
+      .restore .saved {
+        position: absolute;
+        right: 85px;
+        bottom: 53px;
+        padding: 14px 25px;
+        border-radius: 14px;
+        background: #326551;
+        color: #fff;
+        font-size: 23px;
+        box-shadow: 0 12px 35px #315b452a;
+      }
+      .tile-small {
+        width: 440px;
+        height: 280px;
+      }
+      .tile-small .brand {
+        left: 28px;
+        top: 23px;
+        font-size: 23px;
+        gap: 10px;
+      }
+      .tile-small .brand img {
+        width: 31px;
+        height: 31px;
+      }
+      .tile-small h1 {
+        left: 27px;
+        top: 80px;
+        font-size: 51px;
+        line-height: 1.23;
+        letter-spacing: -1.6px;
+      }
+      .tile-small .sub {
+        left: 29px;
+        top: 224px;
+        font-size: 19px;
+      }
+      .tile-large {
+        width: 1400px;
+        height: 560px;
+      }
+      .tile-large .brand {
+        left: 54px;
+        top: 48px;
+      }
+      .tile-large h1 {
+        left: 54px;
+        top: 153px;
+        font-size: 67px;
+        line-height: 1.18;
+      }
+      .tile-large .sub {
+        left: 58px;
+        top: 335px;
+        font-size: 27px;
+      }
+      .tile-large .window {
+        left: 590px;
+        top: 112px;
+        width: 780px;
+        height: 420px;
+        transform: rotate(-2deg);
+      }
+    </style>
+  </head>
+  <body>
+    <main id="poster" class="poster"></main>
+    <script>
+      const brand = '<div class="brand"><img src="source/icon.png" alt="" />GlassNote</div>';
+      const shot = (name, cls) =>
+        `<div class="window ${cls}"><img src="source/${name}.png" alt="GlassNote 实际运行界面" /></div>`;
+      const variants = {
+        hero: [
+          'hero',
+          '把网页，变成你的笔记本',
+          '高亮 · 记笔记 · 统一整理',
+          shot('blog', 'back') +
+            shot('novel', 'front') +
+            '<div class="scene-tag blog">学习博客</div><div class="scene-tag novel">在线阅读</div>',
+        ],
+        blog: [
+          'blog',
+          '学到哪，笔记就记到哪',
+          '读博客、学知识，直接在网页写下理解',
+          shot('blog', 'scene-window'),
+          '学习博客',
+        ],
+        novel: [
+          'novel',
+          '喜欢的句子，随读随记',
+          '读网页小说，也能高亮与记录感想',
+          shot('novel', 'scene-window'),
+          '在线阅读',
+        ],
+        restore: [
+          'restore',
+          '这次记下的，下次接着看',
+          '本地保存，重开网页自动重新定位',
+          '<div class="phase before">这次：留下标注与想法</div><div class="phase after">下次：打开原网页继续读</div>' +
+            shot('novel-before', 'before-shot') +
+            '<div class="arrow">→</div>' +
+            shot('novel-after', 'after-shot') +
+            '<div class="saved">标注与笔记一起保留</div>',
+          '重开恢复',
+        ],
+        library: [
+          'collection',
+          '散落各处的笔记，一处整理',
+          '按网页、颜色筛选，搜索与导出备份',
+          shot('library', 'scene-window'),
+          '统一整理',
+        ],
+        small: ['tile-small', '网页高亮<br />随读随记', '学习 · 阅读 · 整理', ''],
+        large: [
+          'tile-large',
+          '把网页，变成<br />你的笔记本',
+          '高亮 · 记笔记 · 统一整理',
+          shot('blog', ''),
+        ],
+      };
+      const key = new URLSearchParams(location.search).get('scene') || 'hero';
+      const [cls, title, sub, content, context = ''] = variants[key];
+      const poster = document.getElementById('poster');
+      poster.classList.add(cls);
+      if (key === 'large' || key === 'small') {
+        const width = key === 'large' ? 1400 : 440;
+        const height = key === 'large' ? 560 : 280;
+        for (const el of [document.documentElement, document.body]) {
+          el.style.width = width + 'px';
+          el.style.height = height + 'px';
+        }
+      }
+      poster.innerHTML =
+        brand +
+        (context ? `<div class="context">${context}</div>` : '') +
+        `<h1>${title}</h1><p class="sub">${sub}</p>` +
+        content;
+    </script>
+  </body>
+</html>

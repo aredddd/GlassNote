@@ -19,7 +19,7 @@ GlassNote 是一个适用于 Edge 和 Chrome 的网页高亮与笔记扩展。�
 
 适用于支持 CSS Custom Highlight API 的桌面 Chromium 浏览器，最低内核版本为 Chromium 105。
 
-Edge 商店上架准备中，目前可使用源码或 GitHub 安装包。
+已在 [Edge 商店上架](https://microsoftedge.microsoft.com/addons/detail/glassnote/kfmobkojmbkgpcglhlgnhembnoajjpjj)，可直接获取；也可使用下面的源码或 GitHub 安装包方式。
 
 1. 从 [GitHub Releases](https://github.com/aredddd/GlassNote/releases) 下载 GlassNote-v版本号.zip 和 SHA256SUMS 并解压；也可下载仓库源码。
 2. Edge 打开 edge://extensions/；Chrome 打开 chrome://extensions/，开启「开发者模式」。
